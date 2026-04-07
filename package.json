@@ -1,0 +1,14 @@
+{
+  "name": "movie-hub",
+  "version": "1.0.0",
+  "description": "Movie Hub Admin - CRUD Operations with Netlify Functions",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^7.0.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
+  }
+}

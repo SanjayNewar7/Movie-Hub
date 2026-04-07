@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Movie Hub — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,300&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #080b10;
+    --surface: #0f1318;
+    --surface2: #161c24;
+    --border: #1e2730;
+    --border2: #2a3340;
+    --gold: #e8b04b;
+    --gold2: #f5cc7a;
+    --red: #e84b4b;
+    --green: #4be88a;
+    --blue: #4b8be8;
+    --text: #e8e4dc;
+    --muted: #7a8694;
+    --dim: #3a4350;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── NOISE TEXTURE ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(8,11,16,0.92);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: var(--gold);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+
+  .logo-text {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 26px;
+    letter-spacing: 2px;
+    color: var(--text);
+  }
+
+  .logo-text span { color: var(--gold); }
+
+  .header-right {
+    display: flex; align-items: center; gap: 16px;
+  }
+
+  .stat-pill {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .stat-pill strong { color: var(--gold); }
+
+  /* ── AUTH OVERLAY ── */
+  #auth-overlay {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .auth-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    padding: 48px;
+    width: 380px;
+    text-align: center;
+  }
+
+  .auth-box .auth-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 40px;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+  }
+
+  .auth-box .auth-logo span { color: var(--gold); }
+  .auth-box p { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+
+  .auth-box input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 14px 16px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    margin-bottom: 16px;
+    outline: none;
+    transition: border-color 0.2s;
+    letter-spacing: 3px;
+  }
+
+  .auth-box input:focus { border-color: var(--gold); }
+
+  .auth-error { color: var(--red); font-size: 13px; margin-bottom: 12px; display: none; }
+
+  /* ── MAIN LAYOUT ── */
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px;
+    position: relative; z-index: 1;
+  }
+
+  /* ── TOOLBAR ── */
+  .toolbar {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+
+  .toolbar-left { display: flex; align-items: center; gap: 12px; flex: 1; }
+
+  .search-wrap {
+    position: relative;
+    flex: 1; max-width: 360px;
+  }
+
+  .search-wrap svg {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    color: var(--muted);
+  }
+
+  .search-wrap input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px 10px 42px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-wrap input:focus { border-color: var(--gold); }
+  .search-wrap input::placeholder { color: var(--muted); }
+
+  select.filter-select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.18s;
+    border: none;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background: var(--gold);
+    color: #080b10;
+  }
+
+  .btn-primary:hover { background: var(--gold2); transform: translateY(-1px); }
+
+  .btn-danger {
+    background: rgba(232,75,75,0.12);
+    border: 1px solid rgba(232,75,75,0.3);
+    color: var(--red);
+  }
+
+  .btn-danger:hover { background: rgba(232,75,75,0.22); }
+
+  .btn-edit {
+    background: rgba(75,139,232,0.12);
+    border: 1px solid rgba(75,139,232,0.3);
+    color: var(--blue);
+  }
+
+  .btn-edit:hover { background: rgba(75,139,232,0.22); }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+  }
+
+  .btn-ghost:hover { border-color: var(--text); color: var(--text); }
+
+  .btn-sm { padding: 7px 14px; font-size: 13px; }
+
+  /* ── MOVIE GRID ── */
+  #movies-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+  }
+
+  .movie-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: all 0.22s;
+    animation: fadeUp 0.3s ease both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .movie-card:hover {
+    border-color: var(--border2);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  }
+
+  .card-thumb {
+    position: relative;
+    aspect-ratio: 16/9;
+    background: var(--surface2);
+    overflow: hidden;
+  }
+
+  .card-thumb img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s;
+  }
+
+  .movie-card:hover .card-thumb img { transform: scale(1.04); }
+
+  .thumb-placeholder {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 48px; opacity: 0.3;
+  }
+
+  .card-genre-badge {
+    position: absolute; top: 10px; left: 10px;
+    background: rgba(8,11,16,0.8);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 3px 9px;
+    font-size: 11px;
+    color: var(--gold);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+
+  .card-year {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(8,11,16,0.8);
+    backdrop-filter: blur(6px);
+    border-radius: 6px;
+    padding: 3px 9px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .yt-play-btn {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    background: rgba(0,0,0,0.5);
+  }
+
+  .movie-card:hover .yt-play-btn { opacity: 1; }
+
+  .yt-play-btn svg { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6)); }
+
+  .card-body { padding: 16px; }
+
+  .card-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 1px;
+    line-height: 1.1;
+    margin-bottom: 6px;
+  }
+
+  .card-distributor {
+    font-size: 12px;
+    color: var(--gold);
+    font-weight: 500;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+
+  .card-desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.55;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .card-cast {
+    display: flex; flex-wrap: wrap; gap: 5px;
+    margin-bottom: 14px;
+  }
+
+  .cast-tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .card-actions {
+    display: flex; gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(4px);
+    z-index: 500;
+    align-items: center; justify-content: center;
+    padding: 20px;
+  }
+
+  .modal-overlay.active { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 18px;
+    width: 100%; max-width: 680px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: modalIn 0.25s ease;
+  }
+
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.96) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .modal-header {
+    padding: 24px 28px 0;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0;
+    background: var(--surface);
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 26px;
+    letter-spacing: 1.5px;
+  }
+
+  .modal-close {
+    width: 32px; height: 32px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted);
+    font-size: 18px;
+    transition: all 0.15s;
+  }
+
+  .modal-close:hover { color: var(--text); border-color: var(--border2); }
+
+  .modal-body { padding: 24px 28px 28px; }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .form-group { margin-bottom: 18px; }
+
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 7px;
+  }
+
+  .form-group label span { color: var(--gold); }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 14px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus { border-color: var(--gold); }
+
+  .form-group input::placeholder,
+  .form-group textarea::placeholder { color: var(--dim); }
+
+  .form-group textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+
+  .thumb-preview {
+    margin-top: 10px;
+    border-radius: 8px;
+    overflow: hidden;
+    max-height: 140px;
+    display: none;
+  }
+
+  .thumb-preview img { width: 100%; object-fit: cover; }
+
+  .modal-footer {
+    display: flex; gap: 10px; justify-content: flex-end;
+    padding: 16px 28px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; bottom: 0;
+  }
+
+  /* ── EMPTY / LOADING ── */
+  .empty-state {
+    grid-column: 1/-1;
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--muted);
+  }
+
+  .empty-state .icon { font-size: 56px; margin-bottom: 16px; }
+  .empty-state h3 { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--text); margin-bottom: 8px; }
+
+  .loading-spinner {
+    grid-column: 1/-1;
+    display: flex; justify-content: center;
+    padding: 60px;
+  }
+
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border2);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 28px; right: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 14px 20px;
+    font-size: 14px;
+    z-index: 9999;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { border-color: rgba(75,232,138,0.4); }
+  #toast.error { border-color: rgba(232,75,75,0.4); }
+
+  /* ── API DOCS ── */
+  #api-panel {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 28px;
+    overflow: hidden;
+  }
+
+  #api-panel.visible { display: block; }
+
+  .api-panel-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .api-panel-header h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 1px;
+    color: var(--gold);
+  }
+
+  .api-endpoint {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; gap: 14px;
+  }
+
+  .api-endpoint:last-child { border-bottom: none; }
+
+  .method-badge {
+    padding: 3px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: monospace;
+    min-width: 54px;
+    text-align: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .method-get { background: rgba(75,232,138,0.15); color: var(--green); }
+  .method-post { background: rgba(75,139,232,0.15); color: var(--blue); }
+  .method-put { background: rgba(232,176,75,0.15); color: var(--gold); }
+  .method-delete { background: rgba(232,75,75,0.15); color: var(--red); }
+
+  .api-info { flex: 1; }
+  .api-path { font-family: monospace; font-size: 13px; color: var(--text); margin-bottom: 4px; }
+  .api-desc { font-size: 12px; color: var(--muted); }
+
+  /* ── DELETE CONFIRM ── */
+  .delete-confirm-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 600;
+    align-items: center; justify-content: center;
+  }
+
+  .delete-confirm-overlay.active { display: flex; }
+
+  .delete-box {
+    background: var(--surface);
+    border: 1px solid rgba(232,75,75,0.3);
+    border-radius: 14px;
+    padding: 32px;
+    width: 360px;
+    text-align: center;
+  }
+
+  .delete-box .del-icon { font-size: 40px; margin-bottom: 12px; }
+  .delete-box h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  .delete-box p { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .delete-box .btns { display: flex; gap: 10px; justify-content: center; }
+
+  @media (max-width: 600px) {
+    header { padding: 0 16px; }
+    main { padding: 16px; }
+    .form-row { grid-template-columns: 1fr; }
+    .toolbar { flex-direction: column; align-items: stretch; }
+    .stat-pill { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- AUTH OVERLAY -->
+<div id="auth-overlay">
+  <div class="auth-box">
+    <div class="auth-logo">MOVIE<span>HUB</span></div>
+    <p>Admin Panel — Enter your password to continue</p>
+    <input type="password" id="auth-input" placeholder="Admin password" />
+    <div class="auth-error" id="auth-error">Incorrect password. Please try again.</div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doLogin()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+      Enter Admin Panel
+    </button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🎬</div>
+    <div class="logo-text">MOVIE<span>HUB</span></div>
+  </div>
+  <div class="header-right">
+    <div class="stat-pill">Total Movies: <strong id="header-count">0</strong></div>
+    <button class="btn btn-ghost btn-sm" onclick="toggleApiDocs()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      API Docs
+    </button>
+    <button class="btn btn-primary" onclick="openAddModal()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      Add Movie
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- API DOCS PANEL -->
+  <div id="api-panel">
+    <div class="api-panel-header">
+      <h3>📡 Public API Reference</h3>
+      <button class="modal-close" onclick="toggleApiDocs()">✕</button>
+    </div>
+    <div class="api-endpoint">
+      <span class="method-badge method-get">GET</span>
+      <div class="api-info">
+        <div class="api-path" id="api-get-all">/api/movies</div>
+        <div class="api-desc">Fetch all movies — publicly accessible, no auth required. Returns array sorted by newest first.</div>
+      </div>
+    </div>
+    <div class="api-endpoint">
+      <span class="method-badge method-get">GET</span>
+      <div class="api-info">
+        <div class="api-path" id="api-get-one">/api/movies/{id}</div>
+        <div class="api-desc">Fetch a single movie by ID — publicly accessible, no auth required.</div>
+      </div>
+    </div>
+    <div class="api-endpoint">
+      <span class="method-badge method-post">POST</span>
+      <div class="api-info">
+        <div class="api-path">/api/movies</div>
+        <div class="api-desc">Create a movie. Requires <code style="color:var(--gold)">Authorization: Bearer &lt;password&gt;</code> header.</div>
+      </div>
+    </div>
+    <div class="api-endpoint">
+      <span class="method-badge method-put">PUT</span>
+      <div class="api-info">
+        <div class="api-path">/api/movies/{id}</div>
+        <div class="api-desc">Update a movie by ID. Requires auth header.</div>
+      </div>
+    </div>
+    <div class="api-endpoint">
+      <span class="method-badge method-delete">DELETE</span>
+      <div class="api-info">
+        <div class="api-path">/api/movies/{id}</div>
+        <div class="api-desc">Delete a movie by ID. Requires auth header.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <div class="search-wrap">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="search-input" placeholder="Search movies, cast, genre…" oninput="filterMovies()" />
+      </div>
+      <select class="filter-select" id="genre-filter" onchange="filterMovies()">
+        <option value="">All Genres</option>
+        <option>Action</option><option>Adventure</option><option>Animation</option>
+        <option>Comedy</option><option>Crime</option><option>Documentary</option>
+        <option>Drama</option><option>Fantasy</option><option>Horror</option>
+        <option>Musical</option><option>Mystery</option><option>Romance</option>
+        <option>Sci-Fi</option><option>Thriller</option><option>Western</option>
+      </select>
+      <select class="filter-select" id="year-filter" onchange="filterMovies()">
+        <option value="">All Years</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" onclick="openAddModal()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      Add Movie
+    </button>
+  </div>
+
+  <!-- MOVIES GRID -->
+  <div id="movies-grid">
+    <div class="loading-spinner"><div class="spinner"></div></div>
+  </div>
+</main>
+
+<!-- ADD / EDIT MODAL -->
+<div class="modal-overlay" id="movie-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">ADD MOVIE</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id" />
+      <div class="form-group">
+        <label>Movie Title <span>*</span></label>
+        <input type="text" id="f-title" placeholder="e.g. Inception" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Genre <span>*</span></label>
+          <select id="f-genre">
+            <option value="">Select genre</option>
+            <option>Action</option><option>Adventure</option><option>Animation</option>
+            <option>Comedy</option><option>Crime</option><option>Documentary</option>
+            <option>Drama</option><option>Fantasy</option><option>Horror</option>
+            <option>Musical</option><option>Mystery</option><option>Romance</option>
+            <option>Sci-Fi</option><option>Thriller</option><option>Western</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Year <span>*</span></label>
+          <input type="number" id="f-year" placeholder="e.g. 2010" min="1888" max="2099" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Official Distributor</label>
+        <input type="text" id="f-distributor" placeholder="e.g. Warner Bros. Pictures" />
+      </div>
+      <div class="form-group">
+        <label>Cast / Actors <span style="font-weight:300;color:var(--dim);text-transform:none;letter-spacing:0">(comma-separated)</span></label>
+        <input type="text" id="f-cast" placeholder="e.g. Leonardo DiCaprio, Joseph Gordon-Levitt" />
+      </div>
+      <div class="form-group">
+        <label>YouTube Link</label>
+        <input type="url" id="f-youtube" placeholder="https://www.youtube.com/watch?v=..." />
+      </div>
+      <div class="form-group">
+        <label>Thumbnail Image URL</label>
+        <input type="url" id="f-thumbnail" placeholder="https://..." oninput="previewThumb()" />
+        <div class="thumb-preview" id="thumb-preview">
+          <img id="thumb-preview-img" src="" alt="Preview" onerror="this.parentElement.style.display='none'" />
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Description</label>
+        <textarea id="f-desc" placeholder="Brief plot summary or synopsis…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMovie()" id="save-btn">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save Movie
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM -->
+<div class="delete-confirm-overlay" id="delete-overlay">
+  <div class="delete-box">
+    <div class="del-icon">🗑️</div>
+    <h3>Delete Movie?</h3>
+    <p id="delete-movie-name">This action cannot be undone.</p>
+    <div class="btns">
+      <button class="btn btn-ghost" onclick="closeDeleteConfirm()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDelete()" id="confirm-del-btn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────────────────
+const API_BASE = '/api/movies';
+let adminToken = '';
+let allMovies = [];
+let pendingDeleteId = null;
+
+// ── AUTH ─────────────────────────────────────────────────────────────────────
+function doLogin() {
+  const pw = document.getElementById('auth-input').value;
+  if (!pw) return;
+  adminToken = pw;
+  // Test auth with a real call
+  fetchMovies().then(() => {
+    document.getElementById('auth-overlay').style.display = 'none';
+  }).catch(() => {
+    document.getElementById('auth-error').style.display = 'block';
+    adminToken = '';
+  });
+}
+
+document.getElementById('auth-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+// ── API HELPERS ───────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API_BASE + path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'API Error');
+  return data;
+}
+
+// ── FETCH & RENDER ────────────────────────────────────────────────────────────
+async function fetchMovies() {
+  const res = await fetch(API_BASE);
+  if (res.status === 401) throw new Error('Unauthorized');
+  const data = await res.json();
+  if (!data.success) throw new Error('Failed');
+  allMovies = data.movies || [];
+  renderMovies(allMovies);
+  updateYearFilter();
+  document.getElementById('header-count').textContent = allMovies.length;
+  return data;
+}
+
+function renderMovies(movies) {
+  const grid = document.getElementById('movies-grid');
+  if (!movies.length) {
+    grid.innerHTML = `<div class="empty-state">
+      <div class="icon">🎬</div>
+      <h3>No Movies Found</h3>
+      <p>Add your first movie using the button above.</p>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = movies.map((m, i) => movieCard(m, i)).join('');
+}
+
+function ytId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([^&?/\s]{11})/);
+  return m ? m[1] : null;
+}
+
+function movieCard(m, i) {
+  const vid = ytId(m.youtubeLink);
+  const thumb = m.thumbnail || (vid ? `https://img.youtube.com/vi/${vid}/hqdefault.jpg` : '');
+  const castHtml = (m.cast || []).slice(0,4).map(c => `<span class="cast-tag">${c}</span>`).join('');
+  const ytBtn = m.youtubeLink ? `<a href="${m.youtubeLink}" target="_blank" class="yt-play-btn">
+    <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+      <circle cx="26" cy="26" r="26" fill="rgba(232,176,75,0.9)"/>
+      <path d="M21 18l14 8-14 8V18z" fill="#080b10"/>
+    </svg></a>` : '';
+
+  return `<div class="movie-card" style="animation-delay:${i*0.04}s">
+    <div class="card-thumb">
+      ${thumb ? `<img src="${thumb}" alt="${m.title}" loading="lazy" />` : `<div class="thumb-placeholder">🎞️</div>`}
+      ${m.genre ? `<span class="card-genre-badge">${m.genre}</span>` : ''}
+      ${m.year ? `<span class="card-year">${m.year}</span>` : ''}
+      ${ytBtn}
+    </div>
+    <div class="card-body">
+      <div class="card-title">${m.title}</div>
+      ${m.distributor ? `<div class="card-distributor">📦 ${m.distributor}</div>` : ''}
+      ${m.description ? `<div class="card-desc">${m.description}</div>` : ''}
+      ${castHtml ? `<div class="card-cast">${castHtml}</div>` : ''}
+    </div>
+    <div class="card-actions">
+      <button class="btn btn-edit btn-sm" style="flex:1;justify-content:center" onclick="openEditModal('${m.id}')">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Edit
+      </button>
+      <button class="btn btn-danger btn-sm" style="flex:1;justify-content:center" onclick="openDeleteConfirm('${m.id}','${m.title.replace(/'/g,"\\'")}')">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        Delete
+      </button>
+    </div>
+  </div>`;
+}
+
+// ── FILTER ────────────────────────────────────────────────────────────────────
+function filterMovies() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const genre = document.getElementById('genre-filter').value;
+  const year = document.getElementById('year-filter').value;
+  const filtered = allMovies.filter(m => {
+    const matchQ = !q || m.title.toLowerCase().includes(q)
+      || (m.cast||[]).join(' ').toLowerCase().includes(q)
+      || (m.genre||'').toLowerCase().includes(q)
+      || (m.description||'').toLowerCase().includes(q)
+      || (m.distributor||'').toLowerCase().includes(q);
+    const matchGenre = !genre || m.genre === genre;
+    const matchYear = !year || String(m.year) === year;
+    return matchQ && matchGenre && matchYear;
+  });
+  renderMovies(filtered);
+}
+
+function updateYearFilter() {
+  const years = [...new Set(allMovies.map(m => m.year).filter(Boolean))].sort((a,b) => b-a);
+  const sel = document.getElementById('year-filter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Years</option>' + years.map(y => `<option${cur==y?' selected':''}>${y}</option>`).join('');
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────────
+function openAddModal() {
+  document.getElementById('modal-title').textContent = 'ADD MOVIE';
+  document.getElementById('edit-id').value = '';
+  ['title','genre','year','distributor','cast','youtube','thumbnail','desc'].forEach(k => {
+    const el = document.getElementById(`f-${k}`);
+    el.value = '';
+  });
+  document.getElementById('thumb-preview').style.display = 'none';
+  document.getElementById('save-btn').innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Add Movie`;
+  document.getElementById('movie-modal').classList.add('active');
+}
+
+function openEditModal(id) {
+  const m = allMovies.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('modal-title').textContent = 'EDIT MOVIE';
+  document.getElementById('edit-id').value = m.id;
+  document.getElementById('f-title').value = m.title || '';
+  document.getElementById('f-genre').value = m.genre || '';
+  document.getElementById('f-year').value = m.year || '';
+  document.getElementById('f-distributor').value = m.distributor || '';
+  document.getElementById('f-cast').value = (m.cast||[]).join(', ');
+  document.getElementById('f-youtube').value = m.youtubeLink || '';
+  document.getElementById('f-thumbnail').value = m.thumbnail || '';
+  document.getElementById('f-desc').value = m.description || '';
+  previewThumb();
+  document.getElementById('save-btn').innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Changes`;
+  document.getElementById('movie-modal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('movie-modal').classList.remove('active');
+}
+
+function previewThumb() {
+  const url = document.getElementById('f-thumbnail').value;
+  const wrap = document.getElementById('thumb-preview');
+  const img = document.getElementById('thumb-preview-img');
+  if (url) {
+    img.src = url;
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
+// ── SAVE ──────────────────────────────────────────────────────────────────────
+async function saveMovie() {
+  const id = document.getElementById('edit-id').value;
+  const title = document.getElementById('f-title').value.trim();
+  const year = document.getElementById('f-year').value;
+  if (!title || !year) { toast('Title and Year are required', 'error'); return; }
+
+  const payload = {
+    title,
+    genre: document.getElementById('f-genre').value,
+    year: parseInt(year),
+    distributor: document.getElementById('f-distributor').value.trim(),
+    cast: document.getElementById('f-cast').value,
+    youtubeLink: document.getElementById('f-youtube').value.trim(),
+    thumbnail: document.getElementById('f-thumbnail').value.trim(),
+    description: document.getElementById('f-desc').value.trim(),
+  };
+
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    if (id) {
+      await api('PUT', `/${id}`, payload);
+      toast('✅ Movie updated successfully', 'success');
+    } else {
+      await api('POST', '', payload);
+      toast('✅ Movie added successfully', 'success');
+    }
+    closeModal();
+    await fetchMovies();
+  } catch(e) {
+    toast('❌ ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Movie`;
+  }
+}
+
+// ── DELETE ─────────────────────────────────────────────────────────────────────
+function openDeleteConfirm(id, name) {
+  pendingDeleteId = id;
+  document.getElementById('delete-movie-name').textContent = `"${name}" will be permanently removed.`;
+  document.getElementById('delete-overlay').classList.add('active');
+}
+
+function closeDeleteConfirm() {
+  pendingDeleteId = null;
+  document.getElementById('delete-overlay').classList.remove('active');
+}
+
+async function confirmDelete() {
+  if (!pendingDeleteId) return;
+  const btn = document.getElementById('confirm-del-btn');
+  btn.disabled = true; btn.textContent = 'Deleting…';
+  try {
+    await api('DELETE', `/${pendingDeleteId}`);
+    toast('🗑️ Movie deleted', 'success');
+    closeDeleteConfirm();
+    await fetchMovies();
+  } catch(e) {
+    toast('❌ ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Delete';
+  }
+}
+
+// ── API DOCS ──────────────────────────────────────────────────────────────────
+function toggleApiDocs() {
+  const panel = document.getElementById('api-panel');
+  panel.classList.toggle('visible');
+  const base = window.location.origin;
+  document.getElementById('api-get-all').textContent = `${base}/api/movies`;
+  document.getElementById('api-get-one').textContent = `${base}/api/movies/{id}`;
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// ── CLOSE ON BACKDROP ─────────────────────────────────────────────────────────
+document.getElementById('movie-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+document.getElementById('delete-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeDeleteConfirm();
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+// Auto-attempt login in case password is cached or skip auth for dev
+window.addEventListener('load', () => {
+  const saved = sessionStorage.getItem('mh_token');
+  if (saved) {
+    adminToken = saved;
+    fetchMovies().then(() => {
+      document.getElementById('auth-overlay').style.display = 'none';
+    }).catch(() => {
+      adminToken = '';
+      sessionStorage.removeItem('mh_token');
+    });
+  }
+});
+
+// Save token to session on successful login
+const origFetch = fetchMovies;
+</script>
+</body>
+</html>
