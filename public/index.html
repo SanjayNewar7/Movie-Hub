@@ -614,7 +614,97 @@
   .delete-box p { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
   .delete-box .btns { display: flex; gap: 10px; justify-content: center; }
 
-  @media (max-width: 600px) {
+  .api-section-label {
+    padding: 8px 24px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+  }
+
+  .api-search-block {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(232,176,75,0.03);
+  }
+
+  .api-search-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .api-search-desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+
+  .api-search-desc code { color: var(--gold); font-family: monospace; }
+
+  .api-params { display: flex; flex-direction: column; gap: 0; margin-bottom: 16px; }
+
+  .param-row {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 10px 14px;
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    align-items: start;
+    border: 1px solid transparent;
+    transition: background 0.15s;
+  }
+
+  .param-row:hover { background: var(--surface2); border-color: var(--border); }
+  .param-row-combo { grid-template-columns: 80px 1fr; }
+
+  .param-name {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--gold);
+    font-weight: 600;
+    padding-top: 1px;
+  }
+
+  .param-desc { color: var(--muted); line-height: 1.4; }
+
+  .param-eg {
+    grid-column: 2;
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 2px;
+    word-break: break-all;
+  }
+
+  .api-response-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+  }
+
+  .api-code {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--muted);
+    overflow-x: auto;
+    line-height: 1.6;
+    white-space: pre;
+  }
     header { padding: 0 16px; }
     main { padding: 16px; }
     .form-row { grid-template-columns: 1fr; }
@@ -665,39 +755,108 @@
       <h3>📡 Public API Reference</h3>
       <button class="modal-close" onclick="toggleApiDocs()">✕</button>
     </div>
+
+    <!-- Section: Public -->
+    <div class="api-section-label">PUBLIC — No authentication required</div>
+
     <div class="api-endpoint">
       <span class="method-badge method-get">GET</span>
       <div class="api-info">
         <div class="api-path" id="api-get-all">/api/movies</div>
-        <div class="api-desc">Fetch all movies — publicly accessible, no auth required. Returns array sorted by newest first.</div>
+        <div class="api-desc">Fetch all movies. Returns newest first.</div>
       </div>
     </div>
+
     <div class="api-endpoint">
       <span class="method-badge method-get">GET</span>
       <div class="api-info">
         <div class="api-path" id="api-get-one">/api/movies/{id}</div>
-        <div class="api-desc">Fetch a single movie by ID — publicly accessible, no auth required.</div>
+        <div class="api-desc">Fetch a single movie by its ID.</div>
       </div>
     </div>
+
+    <!-- Search params block -->
+    <div class="api-search-block">
+      <div class="api-search-title">🔍 Search Query Parameters</div>
+      <div class="api-search-desc">Combine any of these on <code id="api-search-base">/api/movies</code> — all are optional and can be mixed freely.</div>
+      <div class="api-params">
+        <div class="param-row">
+          <span class="param-name">title</span>
+          <span class="param-desc">Filter by movie title (partial, case-insensitive)</span>
+          <span class="param-eg" id="ex-title">/api/movies?title=inception</span>
+        </div>
+        <div class="param-row">
+          <span class="param-name">genre</span>
+          <span class="param-desc">Filter by genre (partial, case-insensitive)</span>
+          <span class="param-eg" id="ex-genre">/api/movies?genre=sci-fi</span>
+        </div>
+        <div class="param-row">
+          <span class="param-name">year</span>
+          <span class="param-desc">Filter by exact release year</span>
+          <span class="param-eg" id="ex-year">/api/movies?year=2010</span>
+        </div>
+        <div class="param-row">
+          <span class="param-name">cast</span>
+          <span class="param-desc">Search within cast/actor names (partial, case-insensitive)</span>
+          <span class="param-eg" id="ex-cast">/api/movies?cast=dicaprio</span>
+        </div>
+        <div class="param-row">
+          <span class="param-name">q</span>
+          <span class="param-desc">Global search across title, genre, cast, description, distributor</span>
+          <span class="param-eg" id="ex-q">/api/movies?q=nolan</span>
+        </div>
+        <div class="param-row param-row-combo">
+          <span class="param-name">combine</span>
+          <span class="param-desc">Mix multiple filters — all must match (AND logic)</span>
+          <span class="param-eg" id="ex-combo">/api/movies?genre=action&amp;year=2022</span>
+        </div>
+      </div>
+
+      <div class="api-response-label">Example Response</div>
+      <pre class="api-code">{
+  "success": true,
+  "count": 1,
+  "filters": { "title": "inception" },
+  "movies": [
+    {
+      "id": "movie_1720000000_abc123",
+      "title": "Inception",
+      "genre": "Sci-Fi",
+      "year": 2010,
+      "distributor": "Warner Bros. Pictures",
+      "cast": ["Leonardo DiCaprio", "Joseph Gordon-Levitt"],
+      "youtubeLink": "https://youtube.com/watch?v=...",
+      "thumbnail": "https://...",
+      "description": "A thief who enters dreams...",
+      "createdAt": "2024-07-01T00:00:00.000Z",
+      "updatedAt": "2024-07-01T00:00:00.000Z"
+    }
+  ]
+}</pre>
+    </div>
+
+    <!-- Section: Protected -->
+    <div class="api-section-label" style="margin-top:4px;">PROTECTED — Requires <code style="color:var(--gold);font-size:11px">Authorization: Bearer &lt;password&gt;</code></div>
+
     <div class="api-endpoint">
       <span class="method-badge method-post">POST</span>
       <div class="api-info">
         <div class="api-path">/api/movies</div>
-        <div class="api-desc">Create a movie. Requires <code style="color:var(--gold)">Authorization: Bearer &lt;password&gt;</code> header.</div>
+        <div class="api-desc">Create a new movie. Body: <code style="color:var(--muted)">{ title, year, genre, distributor, cast, youtubeLink, thumbnail, description }</code></div>
       </div>
     </div>
     <div class="api-endpoint">
       <span class="method-badge method-put">PUT</span>
       <div class="api-info">
         <div class="api-path">/api/movies/{id}</div>
-        <div class="api-desc">Update a movie by ID. Requires auth header.</div>
+        <div class="api-desc">Update any fields of an existing movie by ID.</div>
       </div>
     </div>
-    <div class="api-endpoint">
+    <div class="api-endpoint" style="border-bottom:none">
       <span class="method-badge method-delete">DELETE</span>
       <div class="api-info">
         <div class="api-path">/api/movies/{id}</div>
-        <div class="api-desc">Delete a movie by ID. Requires auth header.</div>
+        <div class="api-desc">Permanently delete a movie by ID.</div>
       </div>
     </div>
   </div>
@@ -1064,8 +1223,15 @@ function toggleApiDocs() {
   const panel = document.getElementById('api-panel');
   panel.classList.toggle('visible');
   const base = window.location.origin;
-  document.getElementById('api-get-all').textContent = `${base}/api/movies`;
-  document.getElementById('api-get-one').textContent = `${base}/api/movies/{id}`;
+  document.getElementById('api-get-all').textContent   = `${base}/api/movies`;
+  document.getElementById('api-get-one').textContent   = `${base}/api/movies/{id}`;
+  document.getElementById('api-search-base').textContent = `${base}/api/movies`;
+  document.getElementById('ex-title').textContent  = `${base}/api/movies?title=inception`;
+  document.getElementById('ex-genre').textContent  = `${base}/api/movies?genre=sci-fi`;
+  document.getElementById('ex-year').textContent   = `${base}/api/movies?year=2010`;
+  document.getElementById('ex-cast').textContent   = `${base}/api/movies?cast=dicaprio`;
+  document.getElementById('ex-q').textContent      = `${base}/api/movies?q=nolan`;
+  document.getElementById('ex-combo').textContent  = `${base}/api/movies?genre=action&year=2022`;
 }
 
 // ── TOAST ─────────────────────────────────────────────────────────────────────
