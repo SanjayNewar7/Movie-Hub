@@ -53,7 +53,14 @@ export default async (req, context) => {
         if (!data) return new Response(JSON.stringify({ error: "Movie not found" }), { status: 404, headers: corsHeaders() });
         return new Response(JSON.stringify({ success: true, movie: data }), { status: 200, headers: corsHeaders() });
       } else {
-        // GET all movies: /api/movies
+        // GET all movies with optional query filters:
+        // ?title=   ?genre=   ?year=   ?cast=   ?q= (searches title+cast+genre+desc)
+        const qTitle    = url.searchParams.get("title")?.trim().toLowerCase() || "";
+        const qGenre    = url.searchParams.get("genre")?.trim().toLowerCase() || "";
+        const qYear     = url.searchParams.get("year")?.trim() || "";
+        const qCast     = url.searchParams.get("cast")?.trim().toLowerCase() || "";
+        const qGlobal   = url.searchParams.get("q")?.trim().toLowerCase() || "";
+
         const { blobs } = await store.list();
         const movies = await Promise.all(
           blobs.map(async (blob) => {
@@ -61,15 +68,52 @@ export default async (req, context) => {
             return data;
           })
         );
-        const sorted = movies
-          .filter(Boolean)
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        let results = movies.filter(Boolean);
+
+        // Apply filters
+        if (qTitle) {
+          results = results.filter(m => m.title?.toLowerCase().includes(qTitle));
+        }
+        if (qGenre) {
+          results = results.filter(m => m.genre?.toLowerCase().includes(qGenre));
+        }
+        if (qYear) {
+          results = results.filter(m => String(m.year) === qYear);
+        }
+        if (qCast) {
+          results = results.filter(m =>
+            (m.cast || []).some(c => c.toLowerCase().includes(qCast))
+          );
+        }
+        if (qGlobal) {
+          results = results.filter(m =>
+            m.title?.toLowerCase().includes(qGlobal) ||
+            m.genre?.toLowerCase().includes(qGlobal) ||
+            m.description?.toLowerCase().includes(qGlobal) ||
+            m.distributor?.toLowerCase().includes(qGlobal) ||
+            String(m.year).includes(qGlobal) ||
+            (m.cast || []).some(c => c.toLowerCase().includes(qGlobal))
+          );
+        }
+
+        // Sort newest first
+        results.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // Build active filters summary for response transparency
+        const appliedFilters = {};
+        if (qTitle)  appliedFilters.title  = qTitle;
+        if (qGenre)  appliedFilters.genre  = qGenre;
+        if (qYear)   appliedFilters.year   = qYear;
+        if (qCast)   appliedFilters.cast   = qCast;
+        if (qGlobal) appliedFilters.q      = qGlobal;
 
         return new Response(
           JSON.stringify({
             success: true,
-            count: sorted.length,
-            movies: sorted,
+            count: results.length,
+            filters: Object.keys(appliedFilters).length ? appliedFilters : undefined,
+            movies: results,
           }),
           { status: 200, headers: corsHeaders() }
         );
