@@ -48,15 +48,9 @@ export default async (req) => {
   }
 
   const url = new URL(req.url);
-
-  // Extract movieId — works regardless of whether Netlify routes via:
-  //   /api/ratings/{movieId}
-  //   /.netlify/functions/ratings  (with original path preserved in header)
-  // Strategy: strip every known prefix and take the first remaining segment.
-  const rawPath = req.headers.get("x-netlify-original-path") || url.pathname;
-  const pathParts = rawPath
-    .replace(/^\/api\/ratings\/?/, "")
-    .replace(/^\/\.netlify\/functions\/ratings\/?/, "")
+  // Extract movieId from path:  /api/ratings/{movieId}
+  const pathParts = url.pathname
+    .replace(/^\/api\/ratings\/?|^\/.netlify\/functions\/ratings\/?/, "")
     .split("/")
     .filter(Boolean);
   const movieId = pathParts[0];
