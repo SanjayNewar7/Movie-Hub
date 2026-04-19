@@ -42,12 +42,7 @@ export default async (req, context) => {
   const store        = getStore({ name: "movies",  consistency: "strong" });
   const ratingStore  = getStore({ name: "ratings", consistency: "strong" });
   const url = new URL(req.url);
-  const rawPath = req.headers.get("x-netlify-original-path") || url.pathname;
-  const pathParts = rawPath
-    .replace(/^\/api\/movies\/?/, "")
-    .replace(/^\/\.netlify\/functions\/movies\/?/, "")
-    .split("/")
-    .filter(Boolean);
+  const pathParts = url.pathname.replace(/^\/api\/movies\/?|^\/.netlify\/functions\/movies\/?/, "").split("/").filter(Boolean);
   const movieId = pathParts[0];
 
   // Helper – attach rating summary to a movie object
