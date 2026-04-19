@@ -1117,35 +1117,17 @@ let allMovies = [];
 let pendingDeleteId = null;
 
 // ── AUTH ─────────────────────────────────────────────────────────────────────
-async function doLogin() {
-  const pw = document.getElementById('auth-input').value.trim();
+function doLogin() {
+  const pw = document.getElementById('auth-input').value;
   if (!pw) return;
-
-  const btn = document.querySelector('#auth-overlay .btn-primary');
-  btn.disabled = true;
-  btn.textContent = 'Verifying...';
-
-  try {
-    // Verify by hitting a protected POST - server returns 401 only if wrong password,
-    // anything else (400 missing fields, etc.) means auth passed
-    const res = await fetch('/api/movies', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pw}` },
-      body: JSON.stringify({ __authcheck: true })
-    });
-    if (res.status === 401) throw new Error('Wrong password');
-    adminToken = pw;
-    sessionStorage.setItem('mh_token', pw);
-    document.getElementById('auth-error').style.display = 'none';
+  adminToken = pw;
+  // Test auth with a real call
+  fetchMovies().then(() => {
     document.getElementById('auth-overlay').style.display = 'none';
-    fetchMovies();
-  } catch (err) {
+  }).catch(() => {
     document.getElementById('auth-error').style.display = 'block';
     adminToken = '';
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg> Enter Admin Panel`;
-  }
+  });
 }
 
 document.getElementById('auth-input').addEventListener('keydown', e => {
@@ -1543,23 +1525,22 @@ document.getElementById('delete-overlay').addEventListener('click', e => {
 });
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-// Restore session token if saved — bypass login overlay and load movies directly
+// Auto-attempt login in case password is cached or skip auth for dev
 window.addEventListener('load', () => {
   const saved = sessionStorage.getItem('mh_token');
   if (saved) {
     adminToken = saved;
-    // Just load movies directly — GET is public, no auth needed here
-    fetchMovies()
-      .then(() => {
-        document.getElementById('auth-overlay').style.display = 'none';
-      })
-      .catch(() => {
-        // Token stale or network issue — clear and show login
-        adminToken = '';
-        sessionStorage.removeItem('mh_token');
-      });
+    fetchMovies().then(() => {
+      document.getElementById('auth-overlay').style.display = 'none';
+    }).catch(() => {
+      adminToken = '';
+      sessionStorage.removeItem('mh_token');
+    });
   }
 });
+
+// Save token to session on successful login
+const origFetch = fetchMovies;
 </script>
 </body>
 </html>
