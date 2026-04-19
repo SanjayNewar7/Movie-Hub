@@ -3,22 +3,14 @@
   functions = "netlify/functions"
 
 [[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[[redirects]]
   from = "/api/ratings/*"
-  to = "/.netlify/functions/ratings"
+  to = "/.netlify/functions/ratings/:splat"
   status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/movies/*"
-  to = "/.netlify/functions/movies"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/movies"
-  to = "/.netlify/functions/movies"
-  status = 200
-  force = true
 
 [[headers]]
   for = "/.netlify/functions/*"
