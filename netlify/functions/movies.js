@@ -39,10 +39,31 @@ export default async (req, context) => {
     return new Response("", { status: 204, headers: corsHeaders() });
   }
 
-  const store = getStore({ name: "movies", consistency: "strong" });
+  const store        = getStore({ name: "movies",  consistency: "strong" });
+  const ratingStore  = getStore({ name: "ratings", consistency: "strong" });
   const url = new URL(req.url);
-  const pathParts = url.pathname.replace(/^\/api\/movies\/?|^\/.netlify\/functions\/movies\/?/, "").split("/").filter(Boolean);
+  const rawPath = req.headers.get("x-netlify-original-path") || url.pathname;
+  const pathParts = rawPath
+    .replace(/^\/api\/movies\/?/, "")
+    .replace(/^\/\.netlify\/functions\/movies\/?/, "")
+    .split("/")
+    .filter(Boolean);
   const movieId = pathParts[0];
+
+  // Helper – attach rating summary to a movie object
+  async function withRating(movie) {
+    try {
+      const r = await ratingStore.get(movie.id, { type: "json" }).catch(() => null);
+      return {
+        ...movie,
+        rating: r
+          ? { averageRating: r.averageRating, totalRatings: r.totalRatings, breakdown: r.breakdown }
+          : { averageRating: 0, totalRatings: 0, breakdown: { "1":0,"2":0,"3":0,"4":0,"5":0 } },
+      };
+    } catch {
+      return { ...movie, rating: { averageRating: 0, totalRatings: 0, breakdown: { "1":0,"2":0,"3":0,"4":0,"5":0 } } };
+    }
+  }
 
   // ── PUBLIC GET (no auth required) ──────────────────────────────────────────
   if (req.method === "GET") {
@@ -51,7 +72,8 @@ export default async (req, context) => {
         // GET single movie: /api/movies/{id}
         const data = await store.get(movieId, { type: "json" });
         if (!data) return new Response(JSON.stringify({ error: "Movie not found" }), { status: 404, headers: corsHeaders() });
-        return new Response(JSON.stringify({ success: true, movie: data }), { status: 200, headers: corsHeaders() });
+        const movie = await withRating(data);
+        return new Response(JSON.stringify({ success: true, movie }), { status: 200, headers: corsHeaders() });
       } else {
         // GET all movies with optional query filters:
         // ?title=   ?genre=   ?year=   ?cast=   ?q= (searches title+cast+genre+desc)
@@ -70,6 +92,8 @@ export default async (req, context) => {
         );
 
         let results = movies.filter(Boolean);
+        // Attach rating to every movie in parallel
+        results = await Promise.all(results.map(withRating));
 
         // Apply filters
         if (qTitle) {
