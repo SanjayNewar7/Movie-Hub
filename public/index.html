@@ -705,7 +705,60 @@
     line-height: 1.6;
     white-space: pre;
   }
-    header { padding: 0 16px; }
+
+  /* ── STAR RATING ── */
+  .star-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    background: rgba(232,176,75,0.04);
+  }
+  .stars-display { display: flex; gap: 2px; }
+  .star-icon { font-size: 14px; line-height: 1; filter: grayscale(1) opacity(0.22); transition: filter 0.15s; }
+  .star-icon.filled { filter: none; }
+  .rating-meta { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex: 1; }
+  .rating-avg { font-weight: 700; color: var(--gold); font-size: 13px; }
+  .rating-count { color: var(--dim); }
+  .rate-btn {
+    background: rgba(232,176,75,0.1); border: 1px solid rgba(232,176,75,0.25);
+    color: var(--gold); border-radius: 6px; padding: 3px 10px;
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; transition: all 0.15s; white-space: nowrap;
+  }
+  .rate-btn:hover { background: rgba(232,176,75,0.22); }
+
+  /* Rate modal */
+  .rate-modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+    z-index: 700; align-items: center; justify-content: center;
+  }
+  .rate-modal-overlay.active { display: flex; }
+  .rate-modal {
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: 18px; padding: 36px 40px; width: 400px;
+    text-align: center; animation: modalIn 0.25s ease;
+  }
+  .rate-modal h3 { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1.5px; margin-bottom: 4px; }
+  .rate-movie-title { color: var(--gold); font-size: 14px; margin-bottom: 6px; font-weight: 500; }
+  .rate-current { font-size: 12px; color: var(--dim); margin-bottom: 24px; }
+  .interactive-stars { display: flex; justify-content: center; gap: 8px; margin-bottom: 10px; }
+  .istar { font-size: 38px; cursor: pointer; filter: grayscale(1) opacity(0.22); transition: filter 0.12s, transform 0.12s; user-select: none; }
+  .istar.hover, .istar.selected { filter: none; transform: scale(1.18); }
+  .star-label { font-size: 13px; color: var(--muted); height: 20px; margin-bottom: 20px; }
+  .rate-submit { width: 100%; justify-content: center; }
+  .rate-success { display: none; flex-direction: column; align-items: center; gap: 8px; }
+  .rate-success .big-star { font-size: 52px; }
+  .rate-success .new-avg { font-size: 24px; color: var(--gold); font-weight: 700; }
+  .rate-success p { color: var(--muted); font-size: 13px; }
+
+  /* Breakdown bars */
+  .breakdown-wrap { margin: 16px 0 20px; text-align: left; }
+  .breakdown-row { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; font-size: 11px; }
+  .breakdown-label { width: 14px; color: var(--muted); text-align: right; flex-shrink: 0; }
+  .breakdown-bar-track { flex: 1; height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .breakdown-bar-fill { height: 100%; background: var(--gold); border-radius: 3px; transition: width 0.5s ease; }
+  .breakdown-count { width: 24px; color: var(--dim); font-size: 10px; }
     main { padding: 16px; }
     .form-row { grid-template-columns: 1fr; }
     .toolbar { flex-direction: column; align-items: stretch; }
@@ -859,6 +912,59 @@
         <div class="api-desc">Permanently delete a movie by ID.</div>
       </div>
     </div>
+
+    <!-- RATINGS SECTION -->
+    <div class="api-section-label">RATINGS — No authentication required</div>
+
+    <div class="api-endpoint">
+      <span class="method-badge method-get">GET</span>
+      <div class="api-info">
+        <div class="api-path" id="api-ratings-get">/api/ratings/{movieId}</div>
+        <div class="api-desc">Fetch aggregated rating for a movie — <code style="color:var(--gold)">averageRating</code>, <code style="color:var(--gold)">totalRatings</code>, and per-star <code style="color:var(--gold)">breakdown</code>. Also embedded inside every <code style="color:var(--muted)">/api/movies</code> response automatically.</div>
+      </div>
+    </div>
+
+    <div class="api-endpoint" style="border-bottom:none">
+      <span class="method-badge method-post">POST</span>
+      <div class="api-info">
+        <div class="api-path" id="api-ratings-post">/api/ratings/{movieId}</div>
+        <div class="api-desc">Submit a rating. Body: <code style="color:var(--gold)">{ "rating": 1–5 }</code>. No user details stored — only the star count is aggregated. Average auto-recalculates on every submission.</div>
+      </div>
+    </div>
+
+    <div class="api-search-block" style="margin-top:0; border-top: 1px solid var(--border);">
+      <div class="api-search-title">📊 Rating Response Format</div>
+      <pre class="api-code" style="margin-top:10px">{
+  "success": true,
+  "rating": {
+    "movieId": "movie_1720000000_abc123",
+    "averageRating": 4.3,
+    "totalRatings": 15,
+    "breakdown": {
+      "5": 8,
+      "4": 4,
+      "3": 2,
+      "2": 1,
+      "1": 0
+    },
+    "lastRatedAt": "2024-07-01T12:00:00.000Z"
+  }
+}
+
+// POST body example:
+{ "rating": 5 }
+
+// Embedded in GET /api/movies response:
+{
+  "id": "movie_...",
+  "title": "Inception",
+  "rating": {
+    "averageRating": 4.3,
+    "totalRatings": 15,
+    "breakdown": { "5": 8, "4": 4, "3": 2, "2": 1, "1": 0 }
+  }
+}</pre>
+    </div>
   </div>
 
   <!-- TOOLBAR -->
@@ -870,7 +976,7 @@
       </div>
       <select class="filter-select" id="genre-filter" onchange="filterMovies()">
         <option value="">All Genres</option>
-        <option>Action</option><option>Adventure</option><option>Animation</option><option>Anime</option>
+        <option>Action</option><option>Adventure</option><option>Animation</option>
         <option>Comedy</option><option>Crime</option><option>Documentary</option>
         <option>Drama</option><option>Fantasy</option><option>Horror</option>
         <option>Musical</option><option>Mystery</option><option>Romance</option>
@@ -910,7 +1016,7 @@
           <label>Genre <span>*</span></label>
           <select id="f-genre">
             <option value="">Select genre</option>
-            <option>Action</option><option>Adventure</option><option>Animation</option><option>Anime</option>
+            <option>Action</option><option>Adventure</option><option>Animation</option>
             <option>Comedy</option><option>Crime</option><option>Documentary</option>
             <option>Drama</option><option>Fantasy</option><option>Horror</option>
             <option>Musical</option><option>Mystery</option><option>Romance</option>
@@ -965,6 +1071,37 @@
     <div class="btns">
       <button class="btn btn-ghost" onclick="closeDeleteConfirm()">Cancel</button>
       <button class="btn btn-danger" onclick="confirmDelete()" id="confirm-del-btn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- RATE MODAL -->
+<div class="rate-modal-overlay" id="rate-modal-overlay">
+  <div class="rate-modal">
+    <div id="rate-form-view">
+      <h3>RATE THIS MOVIE</h3>
+      <div class="rate-movie-title" id="rate-modal-title"></div>
+      <div class="rate-current" id="rate-current-info"></div>
+      <div class="interactive-stars" id="interactive-stars">
+        <span class="istar" data-val="1">★</span>
+        <span class="istar" data-val="2">★</span>
+        <span class="istar" data-val="3">★</span>
+        <span class="istar" data-val="4">★</span>
+        <span class="istar" data-val="5">★</span>
+      </div>
+      <div class="star-label" id="star-label">Tap a star to rate</div>
+      <div class="breakdown-wrap" id="rate-breakdown"></div>
+      <button class="btn btn-primary rate-submit" id="rate-submit-btn" onclick="submitRating()" disabled>
+        Submit Rating
+      </button>
+      <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:10px" onclick="closeRateModal()">Cancel</button>
+    </div>
+    <div class="rate-success" id="rate-success-view">
+      <div class="big-star">⭐</div>
+      <h3>Rating Submitted!</h3>
+      <div class="new-avg" id="success-avg"></div>
+      <p id="success-total"></p>
+      <button class="btn btn-ghost" style="margin-top:12px" onclick="closeRateModal()">Close</button>
     </div>
   </div>
 </div>
@@ -1042,6 +1179,15 @@ function ytId(url) {
   return m ? m[1] : null;
 }
 
+function starsHtml(avg) {
+  let html = '';
+  for (let i = 1; i <= 5; i++) {
+    const filled = i <= Math.round(avg);
+    html += `<span class="star-icon${filled ? ' filled' : ''}">★</span>`;
+  }
+  return html;
+}
+
 function movieCard(m, i) {
   const vid = ytId(m.youtubeLink);
   const thumb = m.thumbnail || (vid ? `https://img.youtube.com/vi/${vid}/hqdefault.jpg` : '');
@@ -1051,6 +1197,16 @@ function movieCard(m, i) {
       <circle cx="26" cy="26" r="26" fill="rgba(232,176,75,0.9)"/>
       <path d="M21 18l14 8-14 8V18z" fill="#080b10"/>
     </svg></a>` : '';
+
+  const r = m.rating || { averageRating: 0, totalRatings: 0 };
+  const ratingRow = `<div class="star-row">
+    <div class="stars-display">${starsHtml(r.averageRating)}</div>
+    <div class="rating-meta">
+      <span class="rating-avg">${r.averageRating > 0 ? r.averageRating.toFixed(1) : '—'}</span>
+      <span class="rating-count">${r.totalRatings > 0 ? `(${r.totalRatings} rating${r.totalRatings !== 1 ? 's' : ''})` : 'No ratings yet'}</span>
+    </div>
+    <button class="rate-btn" onclick="openRateModal('${m.id}', \`${m.title.replace(/`/g,'\\`')}\`)">Rate ★</button>
+  </div>`;
 
   return `<div class="movie-card" style="animation-delay:${i*0.04}s">
     <div class="card-thumb">
@@ -1065,6 +1221,7 @@ function movieCard(m, i) {
       ${m.description ? `<div class="card-desc">${m.description}</div>` : ''}
       ${castHtml ? `<div class="card-cast">${castHtml}</div>` : ''}
     </div>
+    ${ratingRow}
     <div class="card-actions">
       <button class="btn btn-edit btn-sm" style="flex:1;justify-content:center" onclick="openEditModal('${m.id}')">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1232,7 +1389,122 @@ function toggleApiDocs() {
   document.getElementById('ex-cast').textContent   = `${base}/api/movies?cast=dicaprio`;
   document.getElementById('ex-q').textContent      = `${base}/api/movies?q=nolan`;
   document.getElementById('ex-combo').textContent  = `${base}/api/movies?genre=action&year=2022`;
+  document.getElementById('api-ratings-get').textContent  = `${base}/api/ratings/{movieId}`;
+  document.getElementById('api-ratings-post').textContent = `${base}/api/ratings/{movieId}`;
 }
+
+// ── RATING ────────────────────────────────────────────────────────────────────
+let rateMovieId = null;
+let selectedStar = 0;
+const starLabels = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
+
+function openRateModal(movieId, title) {
+  rateMovieId = movieId;
+  selectedStar = 0;
+  document.getElementById('rate-modal-title').textContent = title;
+  document.getElementById('rate-success-view').style.display = 'none';
+  document.getElementById('rate-form-view').style.display = 'block';
+  document.getElementById('rate-submit-btn').disabled = true;
+  document.getElementById('star-label').textContent = 'Tap a star to rate';
+  resetIStars();
+
+  // Fetch current rating for breakdown display
+  const movie = allMovies.find(m => m.id === movieId);
+  const r = movie?.rating;
+  if (r && r.totalRatings > 0) {
+    document.getElementById('rate-current-info').textContent =
+      `Current: ${r.averageRating.toFixed(1)} ★ from ${r.totalRatings} user${r.totalRatings !== 1 ? 's' : ''}`;
+    renderBreakdown(r.breakdown, r.totalRatings);
+  } else {
+    document.getElementById('rate-current-info').textContent = 'No ratings yet — be the first!';
+    document.getElementById('rate-breakdown').innerHTML = '';
+  }
+
+  document.getElementById('rate-modal-overlay').classList.add('active');
+}
+
+function renderBreakdown(breakdown, total) {
+  if (!total) { document.getElementById('rate-breakdown').innerHTML = ''; return; }
+  let html = '';
+  for (let s = 5; s >= 1; s--) {
+    const count = breakdown?.[String(s)] || 0;
+    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+    html += `<div class="breakdown-row">
+      <span class="breakdown-label">${s}</span>
+      <span>★</span>
+      <div class="breakdown-bar-track"><div class="breakdown-bar-fill" style="width:${pct}%"></div></div>
+      <span class="breakdown-count">${count}</span>
+    </div>`;
+  }
+  document.getElementById('rate-breakdown').innerHTML = html;
+}
+
+function closeRateModal() {
+  document.getElementById('rate-modal-overlay').classList.remove('active');
+  rateMovieId = null; selectedStar = 0;
+}
+
+function resetIStars() {
+  document.querySelectorAll('.istar').forEach(s => s.classList.remove('hover','selected'));
+}
+
+// Star hover/click interactions
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.istar').forEach(star => {
+    const val = parseInt(star.dataset.val);
+    star.addEventListener('mouseenter', () => {
+      document.querySelectorAll('.istar').forEach(s => {
+        s.classList.toggle('hover', parseInt(s.dataset.val) <= val);
+      });
+      document.getElementById('star-label').textContent = starLabels[val];
+    });
+    star.addEventListener('mouseleave', () => {
+      document.querySelectorAll('.istar').forEach(s => s.classList.remove('hover'));
+      document.getElementById('star-label').textContent = selectedStar
+        ? starLabels[selectedStar] : 'Tap a star to rate';
+    });
+    star.addEventListener('click', () => {
+      selectedStar = val;
+      document.querySelectorAll('.istar').forEach(s => {
+        s.classList.remove('hover');
+        s.classList.toggle('selected', parseInt(s.dataset.val) <= val);
+      });
+      document.getElementById('star-label').textContent = `You selected: ${starLabels[val]}`;
+      document.getElementById('rate-submit-btn').disabled = false;
+    });
+  });
+});
+
+async function submitRating() {
+  if (!rateMovieId || !selectedStar) return;
+  const btn = document.getElementById('rate-submit-btn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  try {
+    const res = await fetch(`/api/ratings/${rateMovieId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating: selectedStar })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+
+    const r = data.rating;
+    document.getElementById('rate-form-view').style.display = 'none';
+    document.getElementById('rate-success-view').style.display = 'flex';
+    document.getElementById('success-avg').textContent = `${r.averageRating.toFixed(1)} ★ Average`;
+    document.getElementById('success-total').textContent = `${r.totalRatings} user${r.totalRatings !== 1 ? 's' : ''} have rated this movie`;
+
+    // Refresh movies so cards update
+    await fetchMovies();
+  } catch(e) {
+    toast('❌ ' + e.message, 'error');
+    btn.disabled = false; btn.textContent = 'Submit Rating';
+  }
+}
+
+document.getElementById('rate-modal-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeRateModal();
+});
 
 // ── TOAST ─────────────────────────────────────────────────────────────────────
 let toastTimer;
