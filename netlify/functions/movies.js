@@ -1,10 +1,11 @@
 // netlify/functions/movies.js
-// Movie Hub - CRUD API + Public GET Endpoint
-// Powered by Netlify Blobs for persistent storage
+// Movie Hub - OPTIMIZED API with movies_index (Single Blob Pattern)
+// Reduces 500+ reads to just 1 read per request
 
 import { getStore } from "@netlify/blobs";
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "moviehub2024";
+const INDEX_KEY = "movies_index"; // Single blob containing ALL movies with ratings
 
 function corsHeaders() {
   return {
@@ -12,6 +13,9 @@ function corsHeaders() {
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Content-Type": "application/json",
+    // Cache headers to reduce cold starts
+    "Cache-Control": "public, max-age=300, s-maxage=600",
+    "CDN-Cache-Control": "public, max-age=600",
   };
 }
 
@@ -33,123 +37,190 @@ function verifyAuth(headers) {
   return auth.slice(7) === ADMIN_PASSWORD;
 }
 
+// Helper: Get movies index (single blob read!)
+async function getMoviesIndex(store) {
+  try {
+    const index = await store.get(INDEX_KEY, { type: "json" });
+    return index || [];
+  } catch (err) {
+    console.error("Error reading index:", err);
+    return [];
+  }
+}
+
+// Helper: Save movies index (single blob write!)
+async function saveMoviesIndex(store, index) {
+  await store.setJSON(INDEX_KEY, index);
+}
+
+// Helper: Update rating in index
+async function updateRatingInIndex(store, ratingStore, movieId) {
+  const index = await getMoviesIndex(store);
+  const movieIndex = index.findIndex(m => m.id === movieId);
+  
+  if (movieIndex !== -1) {
+    const rating = await ratingStore.get(movieId, { type: "json" }).catch(() => null);
+    if (rating) {
+      index[movieIndex].rating = {
+        averageRating: rating.averageRating || 0,
+        totalRatings: rating.totalRatings || 0,
+        breakdown: rating.breakdown || { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
+      };
+      await saveMoviesIndex(store, index);
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// MIGRATION SCRIPT (Run once via /api/migrate endpoint)
+// This builds the movies_index from existing individual blobs
+// ──────────────────────────────────────────────────────────────────────────
+async function runMigration(store, ratingStore) {
+  console.log("🚀 Running migration to build movies_index...");
+  
+  const { blobs } = await store.list();
+  const movies = [];
+  
+  // Exclude the index itself from migration
+  const movieBlobs = blobs.filter(b => b.key !== INDEX_KEY);
+  
+  for (const blob of movieBlobs) {
+    const movie = await store.get(blob.key, { type: "json" });
+    if (movie) {
+      const rating = await ratingStore.get(blob.key, { type: "json" }).catch(() => null);
+      movies.push({
+        ...movie,
+        rating: rating || {
+          averageRating: 0,
+          totalRatings: 0,
+          breakdown: { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
+        }
+      });
+    }
+  }
+  
+  // Sort by creation date (newest first)
+  movies.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  
+  await saveMoviesIndex(store, movies);
+  console.log(`✅ Migration complete! Indexed ${movies.length} movies.`);
+  return movies;
+}
+
 export default async (req, context) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("", { status: 204, headers: corsHeaders() });
   }
 
-  const store        = getStore({ name: "movies",  consistency: "strong" });
-  const ratingStore  = getStore({ name: "ratings", consistency: "strong" });
+  const store = getStore({ name: "movies", consistency: "strong" });
+  const ratingStore = getStore({ name: "ratings", consistency: "strong" });
   const url = new URL(req.url);
   const pathParts = url.pathname.replace(/^\/api\/movies\/?|^\/.netlify\/functions\/movies\/?/, "").split("/").filter(Boolean);
   const movieId = pathParts[0];
 
-  // Helper – attach rating summary to a movie object
-  async function withRating(movie) {
+  // ── MIGRATION ENDPOINT (Run once: POST /api/movies/migrate) ─────────────
+  if (req.method === "POST" && pathParts[0] === "migrate") {
+    const headers = Object.fromEntries(req.headers.entries());
+    if (!verifyAuth(headers)) {
+      return response(401, { error: "Unauthorized. Admin access required for migration." });
+    }
+    
     try {
-      const r = await ratingStore.get(movie.id, { type: "json" }).catch(() => null);
-      return {
-        ...movie,
-        rating: r
-          ? { averageRating: r.averageRating, totalRatings: r.totalRatings, breakdown: r.breakdown }
-          : { averageRating: 0, totalRatings: 0, breakdown: { "1":0,"2":0,"3":0,"4":0,"5":0 } },
-      };
-    } catch {
-      return { ...movie, rating: { averageRating: 0, totalRatings: 0, breakdown: { "1":0,"2":0,"3":0,"4":0,"5":0 } } };
+      const movies = await runMigration(store, ratingStore);
+      return response(200, { 
+        success: true, 
+        message: `Migration completed successfully`,
+        count: movies.length 
+      });
+    } catch (err) {
+      console.error("Migration error:", err);
+      return response(500, { error: "Migration failed: " + err.message });
     }
   }
 
-  // ── PUBLIC GET (no auth required) ──────────────────────────────────────────
+  // ── PUBLIC GET (No auth required) ──────────────────────────────────────
+  // ✅ OPTIMIZED: Single blob read instead of 500+ reads!
   if (req.method === "GET") {
     try {
+      // Get movies index (ONE blob read!)
+      let movies = await getMoviesIndex(store);
+      
+      // If index is empty, trigger migration automatically (first run)
+      if (movies.length === 0) {
+        console.log("⚠️ movies_index is empty, running auto-migration...");
+        movies = await runMigration(store, ratingStore);
+      }
+      
       if (movieId) {
         // GET single movie: /api/movies/{id}
-        const data = await store.get(movieId, { type: "json" });
-        if (!data) return new Response(JSON.stringify({ error: "Movie not found" }), { status: 404, headers: corsHeaders() });
-        const movie = await withRating(data);
-        return new Response(JSON.stringify({ success: true, movie }), { status: 200, headers: corsHeaders() });
-      } else {
-        // GET all movies with optional query filters:
-        // ?title=   ?genre=   ?year=   ?cast=   ?q= (searches title+cast+genre+desc)
-        const qTitle    = url.searchParams.get("title")?.trim().toLowerCase() || "";
-        const qGenre    = url.searchParams.get("genre")?.trim().toLowerCase() || "";
-        const qYear     = url.searchParams.get("year")?.trim() || "";
-        const qCast     = url.searchParams.get("cast")?.trim().toLowerCase() || "";
-        const qGlobal   = url.searchParams.get("q")?.trim().toLowerCase() || "";
-
-        const { blobs } = await store.list();
-        const movies = await Promise.all(
-          blobs.map(async (blob) => {
-            const data = await store.get(blob.key, { type: "json" });
-            return data;
-          })
-        );
-
-        let results = movies.filter(Boolean);
-        // Attach rating to every movie in parallel
-        results = await Promise.all(results.map(withRating));
-
-        // Apply filters
-        if (qTitle) {
-          results = results.filter(m => m.title?.toLowerCase().includes(qTitle));
+        const movie = movies.find(m => m.id === movieId);
+        if (!movie) {
+          return response(404, { error: "Movie not found" });
         }
-        if (qGenre) {
-          results = results.filter(m => m.genre?.toLowerCase().includes(qGenre));
-        }
-        if (qYear) {
-          results = results.filter(m => String(m.year) === qYear);
-        }
-        if (qCast) {
-          results = results.filter(m =>
-            (m.cast || []).some(c => c.toLowerCase().includes(qCast))
-          );
-        }
-        if (qGlobal) {
-          results = results.filter(m =>
-            m.title?.toLowerCase().includes(qGlobal) ||
-            m.genre?.toLowerCase().includes(qGlobal) ||
-            m.description?.toLowerCase().includes(qGlobal) ||
-            m.distributor?.toLowerCase().includes(qGlobal) ||
-            String(m.year).includes(qGlobal) ||
-            (m.cast || []).some(c => c.toLowerCase().includes(qGlobal))
-          );
-        }
-
-        // Sort newest first
-        results.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-        // Build active filters summary for response transparency
-        const appliedFilters = {};
-        if (qTitle)  appliedFilters.title  = qTitle;
-        if (qGenre)  appliedFilters.genre  = qGenre;
-        if (qYear)   appliedFilters.year   = qYear;
-        if (qCast)   appliedFilters.cast   = qCast;
-        if (qGlobal) appliedFilters.q      = qGlobal;
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            count: results.length,
-            filters: Object.keys(appliedFilters).length ? appliedFilters : undefined,
-            movies: results,
-          }),
-          { status: 200, headers: corsHeaders() }
+        return response(200, { success: true, movie });
+      }
+      
+      // GET all movies with optional query filters
+      const qTitle = url.searchParams.get("title")?.trim().toLowerCase() || "";
+      const qGenre = url.searchParams.get("genre")?.trim().toLowerCase() || "";
+      const qYear = url.searchParams.get("year")?.trim() || "";
+      const qCast = url.searchParams.get("cast")?.trim().toLowerCase() || "";
+      const qGlobal = url.searchParams.get("q")?.trim().toLowerCase() || "";
+      
+      let results = [...movies];
+      
+      // Apply filters
+      if (qTitle) {
+        results = results.filter(m => m.title?.toLowerCase().includes(qTitle));
+      }
+      if (qGenre) {
+        results = results.filter(m => m.genre?.toLowerCase().includes(qGenre));
+      }
+      if (qYear) {
+        results = results.filter(m => String(m.year) === qYear);
+      }
+      if (qCast) {
+        results = results.filter(m =>
+          (m.cast || []).some(c => c.toLowerCase().includes(qCast))
         );
       }
+      if (qGlobal) {
+        results = results.filter(m =>
+          m.title?.toLowerCase().includes(qGlobal) ||
+          m.genre?.toLowerCase().includes(qGlobal) ||
+          m.description?.toLowerCase().includes(qGlobal) ||
+          m.distributor?.toLowerCase().includes(qGlobal) ||
+          String(m.year).includes(qGlobal) ||
+          (m.cast || []).some(c => c.toLowerCase().includes(qGlobal))
+        );
+      }
+      
+      // Build active filters summary
+      const appliedFilters = {};
+      if (qTitle) appliedFilters.title = qTitle;
+      if (qGenre) appliedFilters.genre = qGenre;
+      if (qYear) appliedFilters.year = qYear;
+      if (qCast) appliedFilters.cast = qCast;
+      if (qGlobal) appliedFilters.q = qGlobal;
+      
+      return response(200, {
+        success: true,
+        count: results.length,
+        filters: Object.keys(appliedFilters).length ? appliedFilters : undefined,
+        movies: results,
+      });
+      
     } catch (err) {
       console.error("GET error:", err);
-      return new Response(JSON.stringify({ error: "Failed to fetch movies" }), { status: 500, headers: corsHeaders() });
+      return response(500, { error: "Failed to fetch movies: " + err.message });
     }
   }
 
-  // ── PROTECTED ROUTES (require admin auth) ──────────────────────────────────
+  // ── PROTECTED ROUTES (require admin auth) ──────────────────────────────
   const headers = Object.fromEntries(req.headers.entries());
   if (!verifyAuth(headers)) {
-    return new Response(JSON.stringify({ error: "Unauthorized. Provide a valid Bearer token." }), {
-      status: 401,
-      headers: corsHeaders(),
-    });
+    return response(401, { error: "Unauthorized. Provide a valid Bearer token." });
   }
 
   // POST - Create movie
@@ -159,7 +230,7 @@ export default async (req, context) => {
       const { title, youtubeLink, distributor, cast, genre, year, description, thumbnail } = body;
 
       if (!title || !year) {
-        return new Response(JSON.stringify({ error: "title and year are required" }), { status: 400, headers: corsHeaders() });
+        return response(400, { error: "title and year are required" });
       }
 
       const id = generateId();
@@ -173,61 +244,122 @@ export default async (req, context) => {
         year: parseInt(year),
         description: description || "",
         thumbnail: thumbnail || "",
+        rating: {
+          averageRating: 0,
+          totalRatings: 0,
+          breakdown: { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
+        },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
+      // Save individual blob (keep for backward compatibility)
       await store.setJSON(id, movie);
-      return new Response(JSON.stringify({ success: true, movie }), { status: 201, headers: corsHeaders() });
+      
+      // Update index (✅ OPTIMIZED: single index update)
+      const index = await getMoviesIndex(store);
+      index.unshift(movie); // Add to beginning (newest first)
+      await saveMoviesIndex(store, index);
+      
+      return response(201, { success: true, movie });
     } catch (err) {
       console.error("POST error:", err);
-      return new Response(JSON.stringify({ error: "Failed to create movie" }), { status: 500, headers: corsHeaders() });
+      return response(500, { error: "Failed to create movie: " + err.message });
     }
   }
 
   // PUT - Update movie
   if (req.method === "PUT") {
-    if (!movieId) return new Response(JSON.stringify({ error: "Movie ID required in path: /api/movies/{id}" }), { status: 400, headers: corsHeaders() });
+    if (!movieId) {
+      return response(400, { error: "Movie ID required in path: /api/movies/{id}" });
+    }
+    
     try {
-      const existing = await store.get(movieId, { type: "json" });
-      if (!existing) return new Response(JSON.stringify({ error: "Movie not found" }), { status: 404, headers: corsHeaders() });
-
+      const index = await getMoviesIndex(store);
+      const movieIndex = index.findIndex(m => m.id === movieId);
+      
+      if (movieIndex === -1) {
+        return response(404, { error: "Movie not found" });
+      }
+      
       const body = await req.json();
       const updated = {
-        ...existing,
+        ...index[movieIndex],
         ...body,
         id: movieId,
         cast: body.cast
           ? (Array.isArray(body.cast) ? body.cast : body.cast.split(",").map(s => s.trim()))
-          : existing.cast,
-        year: body.year ? parseInt(body.year) : existing.year,
+          : index[movieIndex].cast,
+        year: body.year ? parseInt(body.year) : index[movieIndex].year,
         updatedAt: new Date().toISOString(),
       };
-
+      
+      // Keep rating from index
+      updated.rating = index[movieIndex].rating;
+      
+      // Update individual blob
       await store.setJSON(movieId, updated);
-      return new Response(JSON.stringify({ success: true, movie: updated }), { status: 200, headers: corsHeaders() });
+      
+      // Update index
+      index[movieIndex] = updated;
+      await saveMoviesIndex(store, index);
+      
+      return response(200, { success: true, movie: updated });
     } catch (err) {
       console.error("PUT error:", err);
-      return new Response(JSON.stringify({ error: "Failed to update movie" }), { status: 500, headers: corsHeaders() });
+      return response(500, { error: "Failed to update movie: " + err.message });
     }
   }
 
   // DELETE - Delete movie
   if (req.method === "DELETE") {
-    if (!movieId) return new Response(JSON.stringify({ error: "Movie ID required in path: /api/movies/{id}" }), { status: 400, headers: corsHeaders() });
+    if (!movieId) {
+      return response(400, { error: "Movie ID required in path: /api/movies/{id}" });
+    }
+    
     try {
-      const existing = await store.get(movieId, { type: "json" });
-      if (!existing) return new Response(JSON.stringify({ error: "Movie not found" }), { status: 404, headers: corsHeaders() });
-
+      const index = await getMoviesIndex(store);
+      const movieIndex = index.findIndex(m => m.id === movieId);
+      
+      if (movieIndex === -1) {
+        return response(404, { error: "Movie not found" });
+      }
+      
+      const deletedMovie = index[movieIndex];
+      
+      // Delete individual blob
       await store.delete(movieId);
-      return new Response(JSON.stringify({ success: true, message: `Movie "${existing.title}" deleted.` }), { status: 200, headers: corsHeaders() });
+      
+      // Delete rating if exists
+      await ratingStore.delete(movieId).catch(() => {});
+      
+      // Update index
+      const newIndex = index.filter(m => m.id !== movieId);
+      await saveMoviesIndex(store, newIndex);
+      
+      return response(200, { 
+        success: true, 
+        message: `Movie "${deletedMovie.title}" deleted.`,
+        deletedId: movieId
+      });
     } catch (err) {
       console.error("DELETE error:", err);
-      return new Response(JSON.stringify({ error: "Failed to delete movie" }), { status: 500, headers: corsHeaders() });
+      return response(500, { error: "Failed to delete movie: " + err.message });
     }
   }
 
-  return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders() });
+  // WARMUP / HEALTH endpoint (for keeping function alive)
+  if (req.method === "GET" && (url.pathname.includes("/warmup") || url.pathname.includes("/health"))) {
+    const index = await getMoviesIndex(store);
+    return response(200, {
+      status: "healthy",
+      timestamp: Date.now(),
+      movieCount: index.length,
+      usingIndex: true
+    });
+  }
+
+  return response(405, { error: "Method not allowed" });
 };
 
 export const config = {
