@@ -1,10 +1,47 @@
 // netlify/functions/movies.js
-// Movie Hub - OPTIMIZED API with movies_index (Single Blob Pattern)
+// Movie Hub - FULLY OPTIMIZED API with In-Memory Cache + Single Blob Pattern
 
 import { getStore } from "@netlify/blobs";
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
 const INDEX_KEY = "movies_index";
+
+// ──────────────────────────────────────────────────────────────────────────
+// 🚀 IN-MEMORY CACHE (30 second TTL)
+// ──────────────────────────────────────────────────────────────────────────
+let memoryCache = {
+  movies: null,
+  lastFetch: 0,
+  ttl: 30000 // 30 seconds cache TTL
+};
+
+function isCacheValid() {
+  return memoryCache.movies !== null && (Date.now() - memoryCache.lastFetch) < memoryCache.ttl;
+}
+
+function getCachedMovies() {
+  if (isCacheValid()) {
+    console.log(`📦 Returning ${memoryCache.movies.length} movies from memory cache`);
+    return memoryCache.movies;
+  }
+  return null;
+}
+
+function setCachedMovies(movies) {
+  memoryCache.movies = movies;
+  memoryCache.lastFetch = Date.now();
+  console.log(`💾 Cached ${movies.length} movies in memory (TTL: ${memoryCache.ttl}ms)`);
+}
+
+function invalidateCache() {
+  memoryCache.movies = null;
+  memoryCache.lastFetch = 0;
+  console.log("🗑️ Cache invalidated");
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Helper Functions
+// ──────────────────────────────────────────────────────────────────────────
 
 function corsHeaders() {
   return {
@@ -12,13 +49,21 @@ function corsHeaders() {
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Content-Type": "application/json",
+    // CDN cache headers (30 seconds, matching memory cache)
+    "Cache-Control": "public, max-age=30, s-maxage=30",
   };
 }
 
-// ✅ FIXED: Return proper Response object
 function jsonResponse(statusCode, data) {
   return new Response(JSON.stringify(data), {
     status: statusCode,
+    headers: corsHeaders()
+  });
+}
+
+function corsResponse() {
+  return new Response("", {
+    status: 204,
     headers: corsHeaders()
   });
 }
@@ -34,9 +79,24 @@ function verifyAuth(headers) {
 }
 
 async function getMoviesIndex(store) {
+  // ✅ First check memory cache
+  const cached = getCachedMovies();
+  if (cached) {
+    return cached;
+  }
+  
+  // Cache miss - fetch from blob storage
+  console.log("📡 Cache miss, fetching from blob storage...");
   try {
     const index = await store.get(INDEX_KEY, { type: "json" });
-    return index || [];
+    const movies = index || [];
+    
+    // Store in memory cache
+    if (movies.length > 0) {
+      setCachedMovies(movies);
+    }
+    
+    return movies;
   } catch (err) {
     console.error("Error reading index:", err);
     return [];
@@ -44,7 +104,11 @@ async function getMoviesIndex(store) {
 }
 
 async function saveMoviesIndex(store, index) {
+  // Save to blob storage
   await store.setJSON(INDEX_KEY, index);
+  
+  // ✅ Update memory cache
+  setCachedMovies(index);
 }
 
 async function runMigration(store, ratingStore) {
@@ -79,7 +143,7 @@ async function runMigration(store, ratingStore) {
 export default async (req, context) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("", { status: 204, headers: corsHeaders() });
+    return corsResponse();
   }
 
   const store = getStore({ name: "movies", consistency: "strong" });
@@ -88,29 +152,55 @@ export default async (req, context) => {
   const pathParts = url.pathname.replace(/^\/api\/movies\/?|^\/.netlify\/functions\/movies\/?/, "").split("/").filter(Boolean);
   const movieId = pathParts[0];
 
-  // ── HEALTH / WARMUP / INIT ENDPOINT (No auth required) ────────────────
-  if (req.method === "GET" && (url.pathname.includes("/health") || url.pathname.includes("/warmup") || url.pathname.includes("/init"))) {
+  // ── HEALTH / WARMUP / INIT / CACHE STATUS ENDPOINT ────────────────────
+  if (req.method === "GET" && (url.pathname.includes("/health") || url.pathname.includes("/warmup") || url.pathname.includes("/init") || url.pathname.includes("/cache"))) {
     try {
       let index = await getMoviesIndex(store);
       let migrated = false;
       
-      // Auto-initialize if empty
       if (index.length === 0) {
         console.log("🔄 Health check triggered auto-migration...");
         index = await runMigration(store, ratingStore);
         migrated = true;
       }
       
+      // Include cache status in response
+      const cacheStatus = {
+        isCached: memoryCache.movies !== null,
+        cacheAge: memoryCache.movies ? (Date.now() - memoryCache.lastFetch) : null,
+        cacheTTL: memoryCache.ttl,
+        cacheValid: isCacheValid()
+      };
+      
       return jsonResponse(200, {
         status: "healthy",
         timestamp: Date.now(),
         movieCount: index.length,
         usingIndex: true,
-        migrated: migrated
+        migrated: migrated,
+        cache: cacheStatus
       });
     } catch (err) {
       console.error("Health check error:", err);
       return jsonResponse(500, { error: "Health check failed: " + err.message });
+    }
+  }
+
+  // ── FORCE CACHE INVALIDATION ENDPOINT (Admin only) ────────────────────
+  if (req.method === "POST" && pathParts[0] === "invalidate-cache") {
+    const headers = Object.fromEntries(req.headers.entries());
+    if (!verifyAuth(headers)) {
+      return jsonResponse(401, { error: "Unauthorized. Admin access required." });
+    }
+    
+    try {
+      invalidateCache();
+      return jsonResponse(200, { 
+        success: true, 
+        message: "Cache invalidated successfully. Next request will fetch fresh data."
+      });
+    } catch (err) {
+      return jsonResponse(500, { error: "Failed to invalidate cache: " + err.message });
     }
   }
 
@@ -137,6 +227,7 @@ export default async (req, context) => {
   // ── PUBLIC GET (No auth required) ──────────────────────────────────────
   if (req.method === "GET") {
     try {
+      // ✅ This now uses memory cache automatically
       let movies = await getMoviesIndex(store);
       
       if (movies.length === 0) {
@@ -144,6 +235,7 @@ export default async (req, context) => {
         movies = await runMigration(store, ratingStore);
       }
       
+      // GET single movie: /api/movies/{id}
       if (movieId) {
         const movie = movies.find(m => m.id === movieId);
         if (!movie) {
@@ -240,8 +332,10 @@ export default async (req, context) => {
         updatedAt: new Date().toISOString(),
       };
 
+      // Save individual blob
       await store.setJSON(id, movie);
       
+      // Update index (this will also update memory cache)
       const index = await getMoviesIndex(store);
       index.unshift(movie);
       await saveMoviesIndex(store, index);
@@ -279,7 +373,10 @@ export default async (req, context) => {
       
       updated.rating = index[movieIndex].rating;
       
+      // Update individual blob
       await store.setJSON(movieId, updated);
+      
+      // Update index (this will also update memory cache)
       index[movieIndex] = updated;
       await saveMoviesIndex(store, index);
       
@@ -306,9 +403,13 @@ export default async (req, context) => {
       
       const deletedMovie = index[movieIndex];
       
+      // Delete individual blob
       await store.delete(movieId);
+      
+      // Delete rating if exists
       await ratingStore.delete(movieId).catch(() => {});
       
+      // Update index (this will also update memory cache)
       const newIndex = index.filter(m => m.id !== movieId);
       await saveMoviesIndex(store, newIndex);
       
