@@ -1,12 +1,18 @@
 // netlify/functions/movies.js
 // Movie Hub — Paginated API with In-Memory Cache + Single Blob Pattern
 //
-// NEW PAGINATION PARAMS:
+// PAGINATION PARAMS (all optional):
 //   ?page=1          — page number (1-based, default 1)
 //   ?limit=20        — items per page (default 20, max 100)
 //   ?cursor=<id>     — cursor-based (alternative to page; more efficient)
+//   ?all=true        — return all results, skip pagination
 //
-// RESPONSE ENVELOPE NOW INCLUDES:
+// ── PAGINATION BEHAVIOUR ──────────────────────────────────────────────────────
+// If NONE of ?page, ?limit, ?cursor are present → returns ALL results (no pagination).
+// This ensures plain /api/movies calls (e.g. admin panel) always see every movie.
+// Pagination only kicks in when the caller explicitly opts in via one of those params.
+//
+// RESPONSE ENVELOPE INCLUDES:
 //   pagination: { page, limit, total, totalPages, hasNext, hasPrev, nextCursor }
 
 import { getStore } from "@netlify/blobs";
@@ -88,7 +94,8 @@ async function getMoviesIndex(store) {
   try {
     const index = await store.get(INDEX_KEY, { type: "json" });
     const movies = index || [];
-    if (movies.length > 0) setCachedMovies(movies);
+    // Cache regardless of length so we don't hammer blob storage on empty state
+    setCachedMovies(movies);
     return movies;
   } catch (err) {
     console.error("Error reading index:", err);
@@ -137,6 +144,15 @@ async function runMigration(store, ratingStore) {
 // Cursor-based: ?cursor=movie_1720000000_abc123&limit=20
 //   → cursor is the ID of the LAST item on the previous page.
 //   → More efficient for large datasets (no offset scan).
+//
+// ── KEY CHANGE ───────────────────────────────────────────────────────────────
+// hasPaginationParams() checks whether the caller actually opted into pagination.
+// If none of ?page, ?limit, ?cursor are supplied, we skip slicing entirely and
+// return the full result set — this is what plain /api/movies calls expect.
+
+function hasPaginationParams(params) {
+  return params.has("page") || params.has("limit") || params.has("cursor");
+}
 
 function paginateMovies(movies, params) {
   const limit = Math.min(Math.max(parseInt(params.get("limit") || "20", 10), 1), 100);
@@ -261,7 +277,7 @@ export default async (req, context) => {
         return jsonResponse(200, { success: true, movie });
       }
 
-      // ── Apply text/field filters first ──
+      // ── Apply text/field filters ──────────────────────────────────────────
       const qTitle   = url.searchParams.get("title")?.trim().toLowerCase()  || "";
       const qGenre   = url.searchParams.get("genre")?.trim().toLowerCase()  || "";
       const qYear    = url.searchParams.get("year")?.trim()                 || "";
@@ -286,19 +302,26 @@ export default async (req, context) => {
         );
       }
 
-      // ── Apply pagination ──
-      // If ?all=true is passed, skip pagination (used for full local cache warm-up)
-      const fetchAll = url.searchParams.get("all") === "true";
+      // ── Build filters object for response ────────────────────────────────
+      const appliedFilters = {};
+      if (qTitle)  appliedFilters.title  = qTitle;
+      if (qGenre)  appliedFilters.genre  = qGenre;
+      if (qYear)   appliedFilters.year   = qYear;
+      if (qCast)   appliedFilters.cast   = qCast;
+      if (qGlobal) appliedFilters.q      = qGlobal;
+
+      // ── Pagination decision ───────────────────────────────────────────────
+      //
+      // Priority order:
+      //   1. ?all=true            → always return everything (existing behaviour)
+      //   2. No pagination params → return everything (fixes admin panel + plain API calls)
+      //   3. ?page / ?limit / ?cursor present → paginate as requested
+      //
+      const fetchAll =
+        url.searchParams.get("all") === "true" ||
+        !hasPaginationParams(url.searchParams);       // ← THE KEY FIX
 
       if (fetchAll) {
-        // Return ALL records (used on first app load to warm local cache)
-        const appliedFilters = {};
-        if (qTitle)  appliedFilters.title  = qTitle;
-        if (qGenre)  appliedFilters.genre  = qGenre;
-        if (qYear)   appliedFilters.year   = qYear;
-        if (qCast)   appliedFilters.cast   = qCast;
-        if (qGlobal) appliedFilters.q      = qGlobal;
-
         return jsonResponse(200, {
           success: true,
           count: results.length,
@@ -317,14 +340,8 @@ export default async (req, context) => {
         });
       }
 
+      // Explicit pagination requested
       const paginated = paginateMovies(results, url.searchParams);
-
-      const appliedFilters = {};
-      if (qTitle)  appliedFilters.title  = qTitle;
-      if (qGenre)  appliedFilters.genre  = qGenre;
-      if (qYear)   appliedFilters.year   = qYear;
-      if (qCast)   appliedFilters.cast   = qCast;
-      if (qGlobal) appliedFilters.q      = qGlobal;
 
       return jsonResponse(200, {
         success: true,
@@ -333,6 +350,7 @@ export default async (req, context) => {
         movies: paginated.movies,
         pagination: paginated.pagination,
       });
+
     } catch (err) {
       console.error("GET error:", err);
       return jsonResponse(500, { error: "Failed to fetch movies: " + err.message });
