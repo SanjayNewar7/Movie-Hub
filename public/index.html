@@ -1109,6 +1109,106 @@
 <!-- TOAST -->
 <div id="toast"></div>
 
+  <!-- THUMBNAIL HEALTH CHECK PANEL -->
+<div id="thumbnail-panel" style="display: none;">
+  <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 28px; overflow: hidden;">
+    <div style="padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+      <div>
+        <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 1px; color: var(--gold);">🔍 Thumbnail Health Checker</h3>
+        <p style="color: var(--muted); font-size: 13px; margin-top: 4px;">Check which movie thumbnails are broken or missing</p>
+      </div>
+      <button class="modal-close" onclick="toggleThumbnailPanel()">✕</button>
+    </div>
+    
+    <!-- Stats Summary -->
+    <div id="thumb-stats" style="padding: 16px 24px; background: rgba(232,176,75,0.05); border-bottom: 1px solid var(--border);">
+      <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+        <div><strong style="font-size: 24px; color: var(--text);" id="stat-total">0</strong><span style="color: var(--muted); margin-left: 8px;">Total Movies</span></div>
+        <div><strong style="font-size: 24px; color: var(--green);" id="stat-ok">0</strong><span style="color: var(--muted); margin-left: 8px;">Working</span></div>
+        <div><strong style="font-size: 24px; color: var(--red);" id="stat-broken">0</strong><span style="color: var(--muted); margin-left: 8px;">Broken</span></div>
+        <div><strong style="font-size: 24px; color: var(--gold);" id="stat-missing">0</strong><span style="color: var(--muted); margin-left: 8px;">No URL</span></div>
+      </div>
+    </div>
+    
+    <!-- Controls -->
+    <div style="padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; flex-wrap: wrap;">
+      <button class="btn btn-primary btn-sm" onclick="runThumbnailCheck()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Check Now
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="refreshThumbnailCache()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Force Refresh
+      </button>
+      <select id="thumb-filter" class="filter-select" style="width: auto;" onchange="filterThumbnailResults()">
+        <option value="all">All Movies</option>
+        <option value="problematic">Problematic Only</option>
+        <option value="broken">Broken URLs Only</option>
+        <option value="missing">Missing URLs Only</option>
+      </select>
+      <span id="check-status" style="color: var(--muted); font-size: 12px; align-self: center; display: none;">Checking...</span>
+    </div>
+    
+    <!-- Results Table -->
+    <div style="overflow-x: auto; max-height: 500px;">
+      <table id="thumbnail-results" style="width: 100%; border-collapse: collapse;">
+        <thead style="position: sticky; top: 0; background: var(--surface2); border-bottom: 1px solid var(--border);">
+          <tr>
+            <th style="padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 600; color: var(--muted);">Status</th>
+            <th style="padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 600; color: var(--muted);">Title</th>
+            <th style="padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 600; color: var(--muted);">Thumbnail Preview</th>
+            <th style="padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 600; color: var(--muted);">URL</th>
+            <th style="padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 600; color: var(--muted);">Error Details</th>
+            <th style="padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 600; color: var(--muted);">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="thumbnail-tbody">
+          <tr><td colspan="6" style="padding: 40px; text-align: center; color: var(--muted);">Click "Check Now" to scan all thumbnails</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<style>
+  .status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .status-ok { background: rgba(75,232,138,0.15); color: var(--green); }
+  .status-broken { background: rgba(232,75,75,0.15); color: var(--red); }
+  .status-missing { background: rgba(232,176,75,0.15); color: var(--gold); }
+  .thumb-preview-small {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+  .thumb-url-text {
+    font-size: 11px;
+    font-family: monospace;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+  }
+  .action-buttons {
+    display: flex;
+    gap: 6px;
+  }
+  .btn-icon {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+</style>
+
 <script>
 // ── CONFIG ──────────────────────────────────────────────────────────────────
 const API_BASE = '/api/movies';
@@ -1541,6 +1641,220 @@ window.addEventListener('load', () => {
 
 // Save token to session on successful login
 const origFetch = fetchMovies;
+
+  // Thumbnail Checker Functionality
+let thumbnailData = [];
+
+async function runThumbnailCheck() {
+  const statusSpan = document.getElementById('check-status');
+  statusSpan.style.display = 'inline-block';
+  statusSpan.textContent = 'Scanning thumbnails (this may take a moment)...';
+  
+  try {
+    const response = await fetch('/api/check-thumbnails?refresh=true');
+    const data = await response.json();
+    
+    if (data.success) {
+      thumbnailData = data.movies;
+      updateThumbnailStats(data.stats);
+      displayThumbnailResults(thumbnailData);
+      toast('✅ Thumbnail check completed', 'success');
+    } else {
+      throw new Error(data.error);
+    }
+  } catch (error) {
+    console.error('Thumbnail check failed:', error);
+    toast('❌ Failed to check thumbnails: ' + error.message, 'error');
+  } finally {
+    statusSpan.style.display = 'none';
+  }
+}
+
+async function refreshThumbnailCache() {
+  if (!adminToken) {
+    toast('Please authenticate first', 'error');
+    return;
+  }
+  
+  const statusSpan = document.getElementById('check-status');
+  statusSpan.style.display = 'inline-block';
+  statusSpan.textContent = 'Refreshing cache...';
+  
+  try {
+    const response = await fetch('/api/check-thumbnails/refresh', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${adminToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      thumbnailData = data.movies || [];
+      updateThumbnailStats(data.stats);
+      displayThumbnailResults(thumbnailData);
+      toast('✅ Cache refreshed and thumbnails rechecked', 'success');
+    } else {
+      throw new Error(data.error);
+    }
+  } catch (error) {
+    toast('❌ Failed to refresh: ' + error.message, 'error');
+  } finally {
+    statusSpan.style.display = 'none';
+  }
+}
+
+function updateThumbnailStats(stats) {
+  if (stats) {
+    document.getElementById('stat-total').textContent = stats.total;
+    document.getElementById('stat-ok').textContent = stats.ok;
+    document.getElementById('stat-broken').textContent = stats.broken;
+    document.getElementById('stat-missing').textContent = stats.missing;
+  }
+}
+
+function displayThumbnailResults(movies) {
+  const tbody = document.getElementById('thumbnail-tbody');
+  const filter = document.getElementById('thumb-filter').value;
+  
+  let filteredMovies = movies;
+  if (filter === 'problematic') {
+    filteredMovies = movies.filter(m => m.status !== 'ok');
+  } else if (filter === 'broken') {
+    filteredMovies = movies.filter(m => m.status === 'broken');
+  } else if (filter === 'missing') {
+    filteredMovies = movies.filter(m => m.status === 'missing');
+  }
+  
+  if (!filteredMovies.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="padding: 40px; text-align: center; color: var(--muted);">No movies found with current filter</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = filteredMovies.map(movie => `
+    <tr style="border-bottom: 1px solid var(--border);">
+      <td style="padding: 12px 16px;">
+        <span class="status-badge status-${movie.status}">
+          ${movie.status === 'ok' ? '✓ Working' : movie.status === 'broken' ? '✗ Broken' : '⚠ Missing URL'}
+        </span>
+      </td>
+      <td style="padding: 12px 16px; font-weight: 500;">${escapeHtml(movie.title)}</td>
+      <td style="padding: 12px 16px;">
+        ${movie.hasThumbnail && movie.status === 'ok' ? 
+          `<img src="${movie.thumbnailUrl}" class="thumb-preview-small" alt="Preview" onerror="this.style.display='none'">` : 
+          movie.status === 'broken' ? 
+            `<div style="width:50px;height:50px;background:var(--surface2);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px;">🖼️</div>` :
+            `<div style="width:50px;height:50px;background:var(--surface2);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px;">❌</div>`
+        }
+      </td>
+      <td style="padding: 12px 16px;">
+        ${movie.hasThumbnail ? 
+          `<div class="thumb-url-text" title="${movie.thumbnailUrl}">${movie.thumbnailUrl}</div>` : 
+          '<span style="color: var(--dim);">No URL provided</span>'
+        }
+      </td>
+      <td style="padding: 12px 16px; font-size: 11px; color: var(--red);">
+        ${movie.error ? movie.error : movie.status === 'ok' ? '✓ Accessible' : '-'}
+        ${movie.statusCode ? ` (HTTP ${movie.statusCode})` : ''}
+      </td>
+      <td style="padding: 12px 16px;">
+        <div class="action-buttons">
+          <button class="btn btn-edit btn-icon" onclick="openEditModal('${movie.id}')">
+            ✏️ Edit
+          </button>
+          <button class="btn btn-primary btn-icon" onclick="testSingleThumbnail('${movie.id}')">
+            🔍 Test
+          </button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  });
+}
+
+function filterThumbnailResults() {
+  if (thumbnailData.length) {
+    displayThumbnailResults(thumbnailData);
+  }
+}
+
+async function testSingleThumbnail(movieId) {
+  try {
+    const response = await fetch(`/api/check-thumbnails/status/${movieId}`);
+    const data = await response.json();
+    
+    if (data.success) {
+      const movie = data.movie;
+      const accessibility = data.accessibility;
+      
+      if (accessibility.accessible) {
+        toast(`✅ "${movie.title}" thumbnail is accessible`, 'success');
+      } else {
+        toast(`❌ "${movie.title}" thumbnail is broken: ${accessibility.error || 'Not accessible'}`, 'error');
+      }
+      
+      // Refresh the current view
+      if (thumbnailData.length) {
+        await refreshThumbnailCache();
+      }
+    } else {
+      throw new Error(data.error);
+    }
+  } catch (error) {
+    toast('Failed to test thumbnail: ' + error.message, 'error');
+  }
+}
+
+function toggleThumbnailPanel() {
+  const panel = document.getElementById('thumbnail-panel');
+  if (panel.style.display === 'none') {
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+// Add button to header for easy access
+function addThumbnailButton() {
+  const headerRight = document.querySelector('.header-right');
+  if (headerRight && !document.getElementById('thumb-check-btn')) {
+    const btn = document.createElement('button');
+    btn.id = 'thumb-check-btn';
+    btn.className = 'btn btn-ghost btn-sm';
+    btn.innerHTML = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg> Thumbnail Health';
+    btn.onclick = toggleThumbnailPanel;
+    
+    // Insert before API Docs button
+    const apiBtn = headerRight.querySelector('button:first-child');
+    if (apiBtn) {
+      headerRight.insertBefore(btn, apiBtn);
+    } else {
+      headerRight.appendChild(btn);
+    }
+  }
+}
+
+// Initialize thumbnail panel on page load
+window.addEventListener('DOMContentLoaded', () => {
+  // Insert thumbnail panel after API panel
+  const apiPanel = document.getElementById('api-panel');
+  if (apiPanel) {
+    const thumbnailPanel = document.getElementById('thumbnail-panel');
+    apiPanel.insertAdjacentElement('afterend', thumbnailPanel);
+    thumbnailPanel.style.display = 'none';
+    addThumbnailButton();
+  }
+});
 </script>
 </body>
 </html>
