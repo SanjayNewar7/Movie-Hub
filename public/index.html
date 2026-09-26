@@ -788,8 +788,9 @@
     <div class="logo-icon">🎬</div>
     <div class="logo-text">MOVIE<span>HUB</span></div>
   </div>
-  <div class="header-right">
+ <div class="header-right">
     <div class="stat-pill">Total Movies: <strong id="header-count">0</strong></div>
+    <a class="btn btn-ghost btn-sm" href="/reports.html">Reports &amp; stats</a>
     <button class="btn btn-ghost btn-sm" onclick="toggleApiDocs()">
       <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
       API Docs
@@ -1253,8 +1254,13 @@ async function fetchMovies() {
   if (res.status === 401) throw new Error('Unauthorized');
   const data = await res.json();
   if (!data.success) throw new Error('Failed');
-  allMovies = data.movies || [];
+   allMovies = data.movies || [];
   renderMovies(allMovies);
+  const linkedMovie = sessionStorage.getItem('mh_open_movie');
+  if (linkedMovie && allMovies.some(movie => movie.id === linkedMovie)) {
+    sessionStorage.removeItem('mh_open_movie');
+    setTimeout(() => openEditModal(linkedMovie), 0);
+  }
   updateYearFilter();
   document.getElementById('header-count').textContent = allMovies.length;
   return data;
