@@ -1,5 +1,6 @@
 {
   "name": "movie-hub",
+  "type": "module",
   "version": "1.0.0",
   "description": "Movie Hub Admin - CRUD Operations with Netlify Functions",
   "scripts": {
