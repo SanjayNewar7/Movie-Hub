@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Movie Hub · Reports &amp; stats</title>
+  <style>
+    :root{color-scheme:dark;--bg:#080d0a;--card:#142019;--line:#2b4031;--text:#f2f7f2;--muted:#a7b8aa;--green:#49d783;--red:#ff7575}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top right,#193d25,var(--bg) 50%);color:var(--text);font:14px system-ui,sans-serif;min-height:100vh}
+    header,main{max-width:1200px;margin:auto;padding:24px}header{display:flex;align-items:center;justify-content:space-between;gap:16px}h1{font-size:26px;margin:0}h2{font-size:17px;margin:0 0 18px}a{color:var(--green)}button,input,select{font:inherit}button{cursor:pointer;border:0;border-radius:10px;padding:10px 15px;background:var(--green);color:#08200e;font-weight:700}button.secondary{background:#26372b;color:var(--text)}button:disabled{opacity:.6;cursor:wait}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:0 0 20px}.card,.panel{background:rgba(20,32,25,.86);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 14px 35px #0003;backdrop-filter:blur(16px)}.card strong{display:block;font-size:32px;color:var(--green);margin-top:10px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-bottom:20px}.list{display:grid;gap:11px}.bar{display:grid;grid-template-columns:minmax(110px,1fr) 2fr 38px;align-items:center;gap:10px}.bar div{height:8px;border-radius:20px;background:#26372b;overflow:hidden}.bar i{display:block;height:100%;background:var(--green);border-radius:20px}.bar small{text-align:right;color:var(--muted)}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}.toolbar select,input{background:#101a13;border:1px solid var(--line);border-radius:9px;color:var(--text);padding:10px}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;min-width:770px}th,td{text-align:left;padding:13px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:12px}td small{display:block;color:var(--muted);margin-top:5px}.id{font-family:monospace;color:var(--muted);font-size:11px}.badge{border-radius:20px;padding:5px 9px;background:#375139;color:var(--green);font-size:12px}.badge.open{background:#51352d;color:#ffb987}.empty{color:var(--muted);padding:22px;text-align:center}.error{color:var(--red)}#login{position:fixed;inset:0;background:#080d0af0;display:grid;place-items:center;z-index:10}#login .panel{width:min(400px,calc(100% - 30px))}#login input{width:100%;margin:14px 0}#login button{width:100%}@media(max-width:760px){.grid{grid-template-columns:1fr}header,main{padding:16px}}
+  </style>
+</head>
+<body>
+  <div id="login"><form class="panel" id="login-form"><h1>Movie Hub</h1><p>Admin reports and movie statistics</p><input type="password" id="password" placeholder="Admin password" required autocomplete="current-password"><button>Open dashboard</button><p id="login-error" class="error" role="alert"></p></form></div>
+  <header><div><a href="/">← Movie admin</a><h1>Reports &amp; stats</h1></div><button class="secondary" id="refresh">Refresh</button></header>
+  <main>
+    <div id="message" class="error" role="alert"></div>
+    <section class="cards"><div class="card">Total reports<strong id="total">0</strong></div><div class="card">Open issues<strong id="open">0</strong></div><div class="card">Movies reported<strong id="reported">0</strong></div></section>
+    <div class="grid"><section class="panel"><h2>Report reasons</h2><div id="types" class="list"></div></section><section class="panel"><h2>Most reported movies</h2><div id="most-reported" class="list"></div></section></div>
+    <section class="panel" style="margin-bottom:20px"><h2>Top 10 most liked movies</h2><p style="color:var(--muted)">Counts reflect favorites synced from app installations after this feature is deployed.</p><div id="most-liked" class="list"></div></section>
+    <section class="panel"><div class="toolbar"><h2>Issue reports</h2><div><select id="filter" aria-label="Filter by status"><option value="all">All reports</option><option value="open">Open</option><option value="resolved">Resolved</option></select> <input id="search" placeholder="Search movie or issue" aria-label="Search reports"></div></div><div class="table-wrap"><table><thead><tr><th>Issue ID / date</th><th>Movie</th><th>Reason</th><th>Details</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div><p id="empty" class="empty" hidden>No reports found.</p></section>
+  </main>
+  <script src="/reports.js" defer></script>
+</body>
+</html>
+public/reports.js
+let token = sessionStorage.getItem('mh_reports_token') || '';
+let reports = [];
+const $ = id => document.getElementById(id);
+const text = value => document.createTextNode(String(value ?? ''));
+const cell = (row, value) => { const td = row.insertCell(); td.append(text(value)); return td; };
+
+async function request(path = '', options = {}) {
+  const response = await fetch('/api/reports' + path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+function bars(id, items, name) {
+  const root = $(id);
+  root.replaceChildren();
+  if (!items.length) { root.append(text('No data yet.')); return; }
+  const max = Math.max(...items.map(x => x.count), 1);
+  for (const item of items) {
+    const row = document.createElement('div'); row.className = 'bar';
+    const label = document.createElement('span'); label.append(text(item[name]));
+    const track = document.createElement('div');
+    const fill = document.createElement('i'); fill.style.width = `${item.count / max * 100}%`;
+    track.append(fill);
+    const count = document.createElement('small'); count.append(text(item.count));
+    row.append(label, track, count); root.append(row);
+  }
+}
+
+function renderRows() {
+  const query = $('search').value.toLowerCase().trim();
+  const filter = $('filter').value;
+  const items = reports.filter(r =>
+    (filter === 'all' || r.status === filter) &&
+    (!query || `${r.id} ${r.movieTitle} ${r.reason} ${r.detail}`.toLowerCase().includes(query)));
+  const tbody = $('rows'); tbody.replaceChildren(); $('empty').hidden = items.length > 0;
+  for (const report of items) {
+    const row = tbody.insertRow();
+    const id = cell(row, report.id); id.className = 'id';
+    const date = document.createElement('small');
+    date.append(text(new Date(report.createdAt).toLocaleString())); id.append(date);
+    const movie = row.insertCell(); const link = document.createElement('a');
+    link.href = `/#movie-${encodeURIComponent(report.movieId)}`;
+    link.addEventListener('click', event => {
+      event.preventDefault();
+      sessionStorage.setItem('mh_open_movie', report.movieId);
+      location.href = '/';
+    });
+    link.append(text(report.movieTitle)); movie.append(link);
+    cell(row, report.reason); cell(row, report.detail || '—');
+    const status = row.insertCell();
+    const badge = document.createElement('span'); badge.className = `badge ${report.status}`;
+    badge.append(text(report.status)); status.append(badge, document.createElement('br'));
+    const action = document.createElement('button'); action.className = 'secondary';
+    action.style.marginTop = '9px'; action.style.padding = '5px 9px';
+    action.append(text(report.status === 'open' ? 'Resolve' : 'Reopen'));
+    action.addEventListener('click', async () => {
+      action.disabled = true;
+      try {
+        await request('/' + encodeURIComponent(report.id), {
+          method: 'PATCH', body: JSON.stringify({ status: report.status === 'open' ? 'resolved' : 'open' }),
+        });
+        await load();
+      } catch (error) { $('message').textContent = error.message; action.disabled = false; }
+    });
+    status.append(action);
+  }
+}
+
+async function load() {
+  const data = await request();
+  reports = data.reports;
+  $('total').textContent = data.stats.total;
+  $('open').textContent = data.stats.open;
+  $('reported').textContent = new Set(reports.map(r => r.movieId)).size;
+  const names = { title_mismatch: 'Title differs', not_playing: 'Not playing', lagging: 'Lagging', wrong_thumbnail: 'Wrong poster', other: 'Other' };
+  bars('types', Object.entries(data.stats.byType).map(([type, count]) => ({ title: names[type] || type, count })), 'title');
+  bars('most-reported', data.stats.mostReported, 'title');
+  bars('most-liked', data.stats.mostLiked, 'title');
+  renderRows();
+  $('login').style.display = 'none'; $('message').textContent = '';
+}
+
+$('login-form').addEventListener('submit', async event => {
+  event.preventDefault(); token = $('password').value;
+  try { await load(); sessionStorage.setItem('mh_reports_token', token); }
+  catch (error) { $('login-error').textContent = error.message; token = ''; }
+});
+$('refresh').addEventListener('click', () => load().catch(error => $('message').textContent = error.message));
+$('search').addEventListener('input', renderRows);
+$('filter').addEventListener('change', renderRows);
+if (token) load().catch(() => { sessionStorage.removeItem('mh_reports_token'); token = ''; });
+lib/data/services/movie_feedback_service.dart
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:dio/dio.dart';
+import 'package:movie_hub/core/constants/api_endpoints.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class MovieFeedbackService {
+  MovieFeedbackService._();
+
+  static Future<void> _favoriteQueue = Future<void>.value();
+
+  static final Dio _dio = Dio(BaseOptions(
+    baseUrl: ApiEndpoints.baseUrl,
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 15),
+    headers: {'Content-Type': 'application/json'},
+  ));
+
+  static Future<void> sendReport({
+    required String movieId,
+    required String type,
+    String detail = '',
+  }) async {
+    await _dio.post('/reports', data: {
+      'movieId': movieId,
+      'type': type,
+      'detail': detail.trim(),
+    });
+  }
+
+  static Future<void> syncFavorites(List<String> movieIds) async {
+    final snapshot = List<String>.of(movieIds);
+    final work = _favoriteQueue.then((_) => _sendFavorites(snapshot));
+    _favoriteQueue = work.catchError((Object _) {});
+    return work;
+  }
+
+  static Future<void> _sendFavorites(List<String> movieIds) async {
+    final prefs = await SharedPreferences.getInstance();
+    var id = prefs.getString('moviehub_installation_id');
+    if (id == null) {
+      final random = Random.secure();
+      id = base64UrlEncode(List<int>.generate(24, (_) => random.nextInt(256)))
+          .replaceAll('=', '');
+      await prefs.setString('moviehub_installation_id', id);
+    }
+    await _dio.post('/reports/likes', data: {
+      'installationId': id,
+      'movieIds': movieIds,
+    });
+  }
+}
