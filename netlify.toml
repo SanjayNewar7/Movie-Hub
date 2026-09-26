@@ -3,18 +3,21 @@
   functions = "netlify/functions"
 
 [[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/reports/*"
+  to = "/.netlify/functions/reports/:splat"
   status = 200
 
 [[redirects]]
-  from = "/api/ratings/*"
-  to = "/.netlify/functions/ratings/:splat"
+  from = "/api/reports"
+  to = "/.netlify/functions/reports"
   status = 200
 
-[[headers]]
-  for = "/.netlify/functions/*"
-  [headers.values]
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
-    Access-Control-Allow-Headers = "Content-Type, Authorization"
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
